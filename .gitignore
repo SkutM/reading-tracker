@@ -1,24 +1,34 @@
-test-results
-node_modules
+# Dependencies and Environments
+/node_modules
+.venv/
+venv/
+__pycache__/
 
-# Output
+# Database Files
+/db.sqlite
+/reading_tracker.db
+
+# Build Artifacts
+/.svelte-kit
+/build
+/dist
 .output
 .vercel
 .netlify
 .wrangler
-/.svelte-kit
-/build
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Env
+# Configuration and Logs
 .env
 .env.*
 !.env.example
 !.env.test
+.vscode
+npm-debug.log
 
-# Vite
+# Vite/TS Cache Files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# OS Files
+.DS_Store
+Thumbs.db
