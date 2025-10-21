@@ -20,7 +20,8 @@ sys.path.append(os.path.join(os.getcwd(), ".."))
 
 
 from api.database import Base
-from api.models import Book 
+from api.models import Book
+from api import auth_models #auth addition
 
 target_metadata = Base.metadata 
 # -------------------------------------------------------------

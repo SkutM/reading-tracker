@@ -1,4 +1,5 @@
 <script lang="ts">
+    export let accessToken: string | null;
     import type { Book } from '$lib/types';
     // this below event will be dispatched when a book is
     // successfully saved, allowing the parent comment
@@ -57,7 +58,8 @@
             const response = await fetch(endpoint, {
               method: method,
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}` // auth
               },
               body: JSON.stringify(bookData)
             });
@@ -92,7 +94,10 @@
 
       try {
         const response = await fetch(`/api/books/${book.id}`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: { // whole headers obj
+            'Authorization': `Bearer ${accessToken}`
+          }
         });
 
         if (response.status !== 204) { // delete returns 204

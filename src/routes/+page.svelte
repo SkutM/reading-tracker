@@ -1,8 +1,26 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { authStore, logout } from '$lib/authStore'; // new
   import type { Book } from '$lib/types';
+  import type { UserResponse } from '$lib/types'; // new
+  import { writable } from 'svelte/store'
   import BookManager from '$lib/BookManager.svelte';
-	// import { updated } from '$app/state';
+  import RegisterForm from '$lib/RegisterForm.svelte'
+  import LoginForm from '$lib/LoginForm.svelte'; // new
+
+  // "subscribe to the store"
+  // automatically update component when store changes (auth)
+  let isAuthenticated = false;
+  let currentUser: UserResponse | null = null;
+  let accessToken: string | null = null;
+
+  // $ prefix is Svelte's shortcut for subscribing to a store
+  $: isAuthenticated = $authStore.isAuthenticated;
+  $: currentUser = $authStore.user;
+  $: accessToken = $authStore.token;
+
+  // RegisterForm stuff
+  let showRegistration = false;
 
   let books: Book[] = [];
   let loading = true;
@@ -28,10 +46,22 @@
   async function fetchBooks() {
     loading = true; // Ensure loading state is set when fetching
     error = null;
+
+    // auth
+    if (!accessToken) { // don't fetch if not logged in
+      loading = false;
+      return;
+    }
     try {
-      const response = await fetch('/api/books/');
+
+      // now, include auth header
+      const response = await fetch('/api/books/', {
+        headers: { 'Authorization': `Bearer ${accessToken}`}
+      });
       
       if (!response.ok) {
+        // if token expired, force logout
+        if (response.status === 401) logout();
         throw new Error(`API error: ${response.statusText}`);
       }
 
@@ -43,10 +73,22 @@
     }
   }
 
-  // Use onMount to trigger the initial fetch
-  onMount(() => {
+  // initial load & auth change listener
+  // runs when component mounts OR when accessToken changes
+  $: if (accessToken) {
     fetchBooks();
-  });
+  } else {
+    // clear data when logging out
+    books = [];
+    loading = false;
+  }
+
+  // *redundant now with above code for auth*
+  //
+  // Use onMount to trigger the initial fetch
+  // onMount(() => {
+  //   fetchBooks();
+  // });
   
   // handler for when BookManager successfully saves a book
   function handleBookSaved(event: CustomEvent<Book>) {
@@ -82,80 +124,114 @@
 <div class="main-container">
   <h1>Reading Tracker</h1>
   <p>Track and review your favorite books!</p>
-  
-  <button on:click={() => { showForm = !showForm; bookToEdit = undefined}}>
-    {#if showForm}
-      Close Form 👆
+
+  <div class="auth-bar">
+    {#if isAuthenticated && currentUser}
+      <span class="welcome-msg">Welcome, {currentUser.username}!</span>
+      <button on:click={logout} class="logout-btn">Log Out</button>
     {:else}
-      + Add New Read
+      <span class="welcome-msg">Please Log In to continue.</span>
     {/if}
-  </button>
+  </div>
   
-  {#if showForm}
-    <BookManager on:bookUpdated={handleBookSaved} /> 
-  {:else if bookToEdit} 
-    <BookManager 
-        book={bookToEdit} 
-        isEditMode={true} 
-        on:bookUpdated={handleBookUpdated}
-        on:bookDeleted={handleBookDeleted}
-    />
-  {/if}
+  {#if isAuthenticated}
+    <button on:click={() => { showForm = !showForm; bookToEdit = undefined}}>
+      {#if showForm}
+        Close Form ☝️
+      {:else}
+        + Add New Read
+      {/if}
+    </button>
+  
+    {#if showForm}
+      <BookManager on:bookUpdated={handleBookSaved} accessToken={accessToken} /> 
+    {:else if bookToEdit} 
+      <BookManager 
+          book={bookToEdit} 
+          isEditMode={true} 
+ 
+          on:bookUpdated={handleBookUpdated}
+          on:bookDeleted={handleBookDeleted}
+          accessToken={accessToken}
+      />
+    {/if}
 
-  {#if loading}
-    <p>Loading your reads...</p>
-  {:else if error}
-    <p class="error">Error: {error}</p>
-  {:else if books.length === 0}
-    <p class="no-books">You haven't added any books yet. Time for some deep thoughts! 🧠</p>
-  {:else}
-    <div class="book-grid">
-      {#each books as book (book.id)}
-        <div 
-          class="book-box"
-          class:is-flipped={book.id === flippedBookId}
-          on:click={() => toggleFlip(book.id)} 
-          role="button" tabindex="0" 
-          on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleFlip(book.id); }}
-        >
-          <div class="flipper">
-            <div class="front">
-              <h2>{book.title}</h2>
-              <p>by {book.author || 'Unknown Author'}</p>
+    {#if loading}
+      <p>Loading your reads...</p>
+    {:else if error}
+      <p class="error">Error: {error}</p>
+    {:else if books.length === 0}
+      <p class="no-books">You haven't added any books yet.
+ Time for some deep thoughts!</p>
+    {:else}
+      <div class="book-grid">
+        {#each books as book (book.id)}
+          <div 
+            class="book-box"
+            class:is-flipped={book.id === flippedBookId}
+            on:click={() => toggleFlip(book.id)} 
+            role="button" tabindex="0" 
+      
+            on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleFlip(book.id); }}
+          >
+            <div class="flipper">
+              <div class="front">
+                <h2>{book.title}</h2>
+                <p>by {book.author || 'Unknown Author'}</p>
 
-              {#if book.cover_image_url}
-                <img src={book.cover_image_url} alt={`Cover for ${book.title}`} class="book-cover" />
-              {/if}
-
-              <div class="rating">
-                {#if book.is_recommended === true}
-                  <span class="thumb-up">Recommended 👍</span>
-                {:else if book.is_recommended === false}
-                  <span class="thumb-down">Not Recommended 👎</span>
-                {:else}
-                  <span class="thumb-neutral">No Rating</span>
+                {#if book.cover_image_url}
+                  <img src={book.cover_image_url} alt={`Cover for ${book.title}`} class="book-cover" />
                 {/if}
-              </div>
-              <p class="read-on">Read: {new Date(book.read_on).toLocaleDateString()}</p>
-              <p class="click-hint">(Click to see review)</p>
-            </div>
 
+                <div class="rating">
+                  {#if book.is_recommended === true}
+    
+                    <span class="thumb-up">Recommended 👍</span>
+                  {:else if book.is_recommended === false}
+                    <span class="thumb-down">Not Recommended 👎</span>
+                  {:else}
+                   
+                    <span class="thumb-neutral">No Rating</span>
+                  {/if}
+                </div>
+                <p class="read-on">Read: {new Date(book.read_on).toLocaleDateString()}</p>
+                <p class="click-hint">(Click to see review)</p>
+              </div>
+
+          
             <div class="back">
-                <h3>{book.title} Review</h3>
-                <p class="review-text">
-                    {#if book.review_text}
-                        {book.review_text}
-                    {:else}
-                        No review written yet.
-                    {/if}
-                </p>
-                <button on:click|stopPropagation={() => { bookToEdit = book; showForm = false; }} class="edit-btn">
-                    Edit Reflection
-                </button>
+                  <h3>{book.title} Review</h3>
+                  <p class="review-text">
+                      {#if book.review_text}
+                          {book.review_text}
+        
+                      {:else}
+                          No review written yet.
+                      {/if}
+                  </p>
+                  <button on:click|stopPropagation={() => { bookToEdit = book; showForm = false; }} class="edit-btn">
+                      Edit Reflection
+                  </button>
+              </div>
             </div>
           </div>
-        </div>
-      {/each}
+        {/each}
+      </div>
+    {/if}
+  <!-- ALL THIS FOR REGISTER -->
+  {:else}
+    <div class="auth-toggle-container">
+      {#if showRegistration}
+        <RegisterForm />
+        <p class="small-link"> 
+          Already have an account? <span on:click={() => showRegistration = false}>Log In</span>
+        </p>
+      {:else}
+        <LoginForm />
+        <p class="small-link">
+          Need an account? <span on:click={() => showRegistration = true}>Register Here</span>
+        </p>
+      {/if}
     </div>
   {/if}
 </div>
@@ -163,7 +239,7 @@
 <style>
   
   :global(body) {
-    background-color: #0d1117; 
+    background-color: #0d1117;
   }
 
   .main-container {
@@ -191,6 +267,36 @@
     background: #2ea043;
   }
 
+  /* --- Styles for the new Auth Bar --- */
+  .auth-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1c1f24; /* Matches .book-box */
+    border: 1px solid #30363d;  /* Matches .book-box */
+    border-radius: 6px;
+    padding: 10px 15px;
+    margin-bottom: 20px; /* Give it space from the "Add" button */
+  }
+
+  .welcome-msg {
+    color: #e6edf3; /* Matches h1 color */
+    font-size: 0.9em;
+  }
+
+  .logout-btn {
+    background: #465d7c;    /* Matches .edit-btn color */
+    padding: 8px 15px;
+    font-size: 0.9em;
+    margin-bottom: 0;       /* Override the default button margin */
+  }
+
+  .logout-btn:hover {
+    background: #5a769d; /* A lighter hover effect */
+  }
+  /* --- End of new Auth Bar styles --- */
+
+
   /* General header and paragraph styling for better readability */
   h1 {
     color: #e6edf3;
@@ -211,10 +317,10 @@
 
   .book-cover {
     position: absolute; /* Lifts the image out of the document flow */
-    top: 100px;          /* 15px from the top of the card */
-    right: 0px;        /* 15px from the right of the card */
+    top: 100px; /* 15px from the top of the card */
+    right: 0px; /* 15px from the right of the card */
     min-width: 70px;
-    max-width: 70px;    /* Constrains the image size */
+    max-width: 70px; /* Constrains the image size */
     border-radius: 4px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
   }
@@ -295,16 +401,16 @@
 
 /* In src/routes/+page.svelte <style> block */
   .review-text {
-    /* 👈 CRITICAL: Enforce scrolling and height */
+    /*  CRITICAL: Enforce scrolling and height */
     max-height: 120px; /* Set a fixed scrollable height (adjust this value if needed) */
-    overflow-y: auto;  /* Displays a scrollbar when content overflows */
+    overflow-y: auto; /* Displays a scrollbar when content overflows */
     
-    /* 👈 CRITICAL: Enforce text wrapping and preservation */
+    /* CRITICAL: Enforce text wrapping and preservation */
     white-space: pre-wrap; /* Respects formatting and wraps long lines */
     word-break: break-word; /* Prevents text from staying on one line */
     
     font-style: italic;
-    padding: 5px; 
+    padding: 5px;
     margin-top: 5px;
     margin-bottom: 5px;
     text-align: left; /* Looks better for reviews */
@@ -329,6 +435,18 @@
     cursor: pointer;
     font-size: 0.9em;
     margin-top: 10px;
+  }
+
+  .small-link {
+    font-size: 0.9em;
+    color: #8b949e;
+    margin-top: 15px;
+  }
+
+  .small-link span {
+    color: #a5b816; /* 👈 Changed to a bright blue for visibility */
+    cursor: pointer;
+    text-decoration: underline;
   }
 
 </style>

@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey # foreignkey for auth
+from sqlalchemy.orm import relationship # for auth
 from .database import Base
 from datetime import datetime
 
@@ -19,3 +20,7 @@ class Book(Base):
     # Metadata
     read_on = Column(DateTime, default=datetime.utcnow) # Use standard Python datetime
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # link book to user for auth (foreign key)
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    owner = relationship("User", back_populates="books")
