@@ -208,7 +208,4 @@
     border-radius: 5px;
     background: rgba(35, 134, 54, 0.1);
   }
-  .rating-toggle p {
-    margin-bottom: 5px;
-  }
 </style>
