@@ -13,7 +13,7 @@
         message = 'Registering user...';
 
         try {
-            // 1. Send POST request to /auth/register
+            // 1. /auth/register POST
             const registerResponse = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -25,13 +25,13 @@
                 throw new Error(errorData.detail || 'Registration failed.');
             }
             
-            // Registration successful! Now attempt to log the user in immediately.
+            // log in immediately upon register
             registeredSuccessfully = true;
             message = '✅ Registration successful! Logging you in...';
             
             // --- Auto-Login Sequence (Same as in LoginForm) ---
             
-            // 2. Authenticate (POST /auth/login)
+            // 2. authenticate
             const tokenResponse = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -41,7 +41,7 @@
             const tokenData: Token = await tokenResponse.json();
             const accessToken = tokenData.access_token;
 
-            // 3. Fetch User Profile (GET /auth/profile)
+            // 3. GET profile /api/auth/profile
             const profileResponse = await fetch('/api/auth/profile', {
                 method: 'GET',
                 headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -49,14 +49,14 @@
             
             const userData: UserResponse = await profileResponse.json();
 
-            // 4. Update the global store state
+            // 4. update global store
             login(accessToken, userData);
             
             message = `Welcome, ${userData.username}! You are now logged in!`;
             isError = false;
 
         } catch (e: any) {
-            // If registration failed OR auto-login failed
+            // register FAIL
             message = `❌ Error: ${e.message}`;
             isError = true;
         }
@@ -82,7 +82,7 @@
 </div>
 
 <style>
-    /* Use similar styling as LoginForm.svelte for consistency */
+    /* similar to LoginForm */
     .register-card {
         background: #274e73;
         padding: 30px;
@@ -111,7 +111,7 @@
     }
     button {
         padding: 12px;
-        background: #c9514c; /* Use a different color for registration/auth actions */
+        background: #c9514c; /* different color for registration/auth button */
         color: white;
         border: none;
         border-radius: 5px;

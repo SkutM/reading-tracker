@@ -218,7 +218,7 @@
         {/each}
       </div>
     {/if}
-  <!-- ALL THIS FOR REGISTER -->
+  <!-- ALL THIS FOR REGISTER (below login logic) -->
   {:else}
     <div class="auth-toggle-container">
       {#if showRegistration}
@@ -247,12 +247,12 @@
     margin: 0 auto;
     padding: 20px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    text-align: center; /* <-- Add this new line */
+    text-align: center;
   }
 
   button {
     padding: 12px 20px;
-    background: #238636; /* This is the green color */
+    background: #238636;
     color: white;
     border: none;
     border-radius: 6px;
@@ -260,44 +260,43 @@
     transition: background-color 0.2s;
     font-size: 1em;
     font-weight: 500;
-    margin-bottom: 20px; /* Adds space below the button */
+    margin-bottom: 20px;
   }
 
   button:hover {
     background: #2ea043;
   }
 
-  /* --- Styles for the new Auth Bar --- */
+    /* AUTH BAR STYLES */
   .auth-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background-color: #1c1f24; /* Matches .book-box */
-    border: 1px solid #30363d;  /* Matches .book-box */
+    background-color: #1c1f24;
+    border: 1px solid #30363d;
     border-radius: 6px;
     padding: 10px 15px;
-    margin-bottom: 20px; /* Give it space from the "Add" button */
+    margin-bottom: 20px;
   }
 
   .welcome-msg {
-    color: #e6edf3; /* Matches h1 color */
+    color: #e6edf3;
     font-size: 0.9em;
   }
 
   .logout-btn {
-    background: #465d7c;    /* Matches .edit-btn color */
+    background: #465d7c;
     padding: 8px 15px;
     font-size: 0.9em;
-    margin-bottom: 0;       /* Override the default button margin */
+    margin-bottom: 0;
   }
 
   .logout-btn:hover {
-    background: #5a769d; /* A lighter hover effect */
+    background: #5a769d; /* lighter hover effect */
   }
-  /* --- End of new Auth Bar styles --- */
+  /* end of auth bar styles */
 
 
-  /* General header and paragraph styling for better readability */
   h1 {
     color: #e6edf3;
   }
@@ -312,21 +311,25 @@
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 20px;
     margin-top: 20px;
-    perspective: 1000px; /* For the 3D flip effect */
+    perspective: 1000px; /* 3D flip effect */
   }
 
   .book-cover {
-    position: absolute; /* Lifts the image out of the document flow */
-    top: 100px; /* 15px from the top of the card */
-    right: 0px; /* 15px from the right of the card */
-    min-width: 70px;
-    max-width: 70px; /* Constrains the image size */
+    position: absolute;
+    bottom: -10px; /* this & below are fixes for book centering */
+    right: -10px;
+    z-index: 10; /* image sits above the text if they overlap */
+
+    /* sizing & styling */
+    max-height: 100px;
+    max-width: 70px;
+    height: auto;
+    width: auto;
     border-radius: 4px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
   }
 
   .front {
-    /* Adjust front container layout to position image nicely */
     justify-content: flex-start;
     align-items: center;
   }
@@ -346,7 +349,7 @@
 
   
   .book-box h2, .book-box h3, .book-box p {
-      color: inherit; /* This forces all child text elements to use the color set above */
+      color: inherit; /* forces all child text elements to use the color set above */
   }
 
   .book-box.is-flipped {
@@ -364,7 +367,7 @@
     position: absolute;
     width: 100%;
     height: 100%;
-    backface-visibility: hidden; /* Hides the back of the element when flipped */
+    backface-visibility: hidden; /* hides the back of the element when flipped */
     -webkit-backface-visibility: hidden;
     display: flex;
     flex-direction: column;
@@ -372,7 +375,7 @@
 
   .back {
     transform: rotateY(180deg);
-    /* Make sure content doesn't force the back element to expand */
+    /* ensures content doesn't force the back element to expand */
     overflow: hidden;
     justify-content: center;
     align-items: center;
@@ -389,7 +392,7 @@
   .read-on {
     font-size: 0.8em;
     color: #8b949e;
-    margin-top: auto; /* Pushes it to the bottom */
+    margin-top: auto;
   }
 
   .click-hint {
@@ -399,21 +402,20 @@
     margin-top: 10px;
   }
 
-/* In src/routes/+page.svelte <style> block */
   .review-text {
-    /*  CRITICAL: Enforce scrolling and height */
-    max-height: 120px; /* Set a fixed scrollable height (adjust this value if needed) */
-    overflow-y: auto; /* Displays a scrollbar when content overflows */
+    /*  important: enforce scrolling and height */
+    max-height: 120px; /* set scrollable height */
+    overflow-y: auto; /* display scrollbar when overflow (only on overflow)*/
     
-    /* CRITICAL: Enforce text wrapping and preservation */
-    white-space: pre-wrap; /* Respects formatting and wraps long lines */
-    word-break: break-word; /* Prevents text from staying on one line */
+    /* important: text wrapping */
+    white-space: pre-wrap; /* formatting and wraps long lines */
+    word-break: break-word; /* prevents text from staying on one line */
     
     font-style: italic;
     padding: 5px;
     margin-top: 5px;
     margin-bottom: 5px;
-    text-align: left; /* Looks better for reviews */
+    text-align: left;
   }
 
   .no-books {
@@ -444,7 +446,7 @@
   }
 
   .small-link span {
-    color: #a5b816; /* 👈 Changed to a bright blue for visibility */
+    color: #a5b816;
     cursor: pointer;
     text-decoration: underline;
   }
