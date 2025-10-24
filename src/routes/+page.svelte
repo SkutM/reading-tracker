@@ -161,8 +161,7 @@
     {:else if error}
       <p class="error">Error: {error}</p>
     {:else if books.length === 0}
-      <p class="no-books">You haven't added any books yet.
- Time for some deep thoughts!</p>
+      <p class="no-books">You haven't added any books yet.</p>
     {:else}
       <div class="book-grid">
         {#each books as book (book.id)}
