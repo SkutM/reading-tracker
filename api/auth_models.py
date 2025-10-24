@@ -6,7 +6,10 @@ from passlib.context import CryptContext
 from .database import Base # import existing Base
 
 # set up password hashing context (replaces Flask-BCrypt)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt_sha256", "bcrypt"],  # new hashes use bcrypt_sha256; old bcrypt hashes still verify
+    deprecated="auto",
+)
 
 class User(Base):
     __tablename__ = 'users'
@@ -23,7 +26,10 @@ class User(Base):
         self.password_hash = pwd_context.hash(password)
     
     def check_password(self, password):
-        return pwd_context.verify(password, self.password_hash)
+        try:
+            return pwd_context.verify(password, self.password_hash)
+        except ValueError:
+            return False
     
 class TokenBlocklist(Base):
     __tablename__ = 'token_blocklist'
