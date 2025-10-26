@@ -1,5 +1,4 @@
 <script lang="ts">
-  // import { onMount } from 'svelte'; // not used
   import { auth as authStore, logout } from '$lib/authStore';
   import type { UserResponse } from '$lib/types';
   import type { Book } from '$lib/api';
@@ -8,6 +7,7 @@
   import LoginForm from '$lib/LoginForm.svelte';
   import { listBooks } from '$lib/api';
 
+  // derive auth state from store
   let isAuthenticated = false;
   let currentUser: UserResponse | null = null;
   let accessToken: string | null = null;
@@ -16,25 +16,27 @@
   $: currentUser = $authStore.user;
   $: accessToken = $authStore.token;
 
+  // UI state
   let showRegistration = false;
   let books: Book[] = [];
   let loading = true;
   let error: string | null = null;
-
   let showForm = false;
   let bookToEdit: Book | undefined = undefined;
 
+  // flip-card state
   let flippedBookId: number | null = null;
   function toggleFlip(bookId: number) {
     flippedBookId = flippedBookId === bookId ? null : bookId;
   }
 
   function formatDateISO(s?: string | null): string {
-    if (!s) return "—";
+    if (!s) return '—';
     const d = new Date(s);
-    return isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
   }
 
+  // fetch books when authenticated
   async function fetchBooks() {
     loading = true;
     error = null;
@@ -53,6 +55,7 @@
     }
   }
 
+  // react to token changes
   $: if (accessToken) {
     fetchBooks();
   } else {
@@ -60,6 +63,7 @@
     loading = false;
   }
 
+  // event handlers from BookManager
   function handleBookSaved(event: CustomEvent<Book>) {
     books = [event.detail, ...books];
     showForm = false;
@@ -67,19 +71,18 @@
 
   function handleBookUpdated(event: CustomEvent<Book>) {
     const updatedBook = event.detail;
-    books = books.map(b => (b.id === updatedBook.id ? updatedBook : b));
+    books = books.map((b) => (b.id === updatedBook.id ? updatedBook : b));
     flippedBookId = null;
     bookToEdit = undefined;
   }
 
   function handleBookDeleted(event: CustomEvent<Book>) {
     const deletedBook = event.detail;
-    books = books.filter(b => b.id !== deletedBook.id);
+    books = books.filter((b) => b.id !== deletedBook.id);
     flippedBookId = null;
     bookToEdit = undefined;
   }
 </script>
-
 
 <svelte:head>
   <title>Reading Tracker</title>
@@ -101,20 +104,19 @@
   </div>
 
   {#if isAuthenticated}
-    <button on:click={() => { showForm = !showForm; bookToEdit = undefined }}>
+    <button on:click={() => { showForm = !showForm; bookToEdit = undefined; }}>
       {#if showForm} Close Form ☝️ {:else} + Add New Read {/if}
     </button>
 
     {#if showForm}
-      <!-- still passing token prop: harmless if your API now reads from localStorage -->
-      <BookManager on:bookUpdated={handleBookSaved} accessToken={accessToken} />
+      <!-- No accessToken prop needed -->
+      <BookManager on:bookUpdated={handleBookSaved} />
     {:else if bookToEdit}
       <BookManager
         book={bookToEdit}
         isEditMode={true}
         on:bookUpdated={handleBookUpdated}
         on:bookDeleted={handleBookDeleted}
-        accessToken={accessToken}
       />
     {/if}
 
@@ -131,7 +133,8 @@
             class="book-box"
             class:is-flipped={book.id === flippedBookId}
             on:click={() => toggleFlip(book.id)}
-            role="button" tabindex="0"
+            role="button"
+            tabindex="0"
             on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleFlip(book.id); }}
           >
             <div class="flipper">
@@ -162,6 +165,7 @@
                   {#if book.review_text}{book.review_text}{:else}No review written yet.{/if}
                 </p>
                 <button
+                  type="button"
                   on:click|stopPropagation={() => { bookToEdit = book; showForm = false; }}
                   class="edit-btn"
                 >
@@ -178,12 +182,14 @@
       {#if showRegistration}
         <RegisterForm />
         <p class="small-link">
-          Already have an account? <span on:click={() => showRegistration = false}>Log In</span>
+          Already have an account?
+          <button type="button" class="linklike" on:click={() => (showRegistration = false)}>Log In</button>
         </p>
       {:else}
         <LoginForm />
         <p class="small-link">
-          Need an account? <span on:click={() => showRegistration = true}>Register Here</span>
+          Need an account?
+          <button type="button" class="linklike" on:click={() => (showRegistration = true)}>Register Here</button>
         </p>
       {/if}
     </div>
@@ -214,6 +220,16 @@
     margin-bottom: 20px;
   }
   button:hover { background: #2ea043; }
+
+  .linklike {
+    background: none;
+    border: none;
+    color: #a5b816;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+    font: inherit;
+  }
 
   .auth-bar {
     display: flex;
@@ -300,5 +316,4 @@
   }
 
   .small-link { font-size: 0.9em; color: #8b949e; margin-top: 15px; }
-  .small-link span { color: #a5b816; cursor: pointer; text-decoration: underline; }
 </style>
