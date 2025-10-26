@@ -9,4 +9,7 @@ class Settings(BaseSettings):
     # 👇 this line ensures it reads from .env in the project root
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+    TURSO_DATABASE_URL: str | None = None
+    TURSO_AUTH_TOKEN: str | None = None
+
 settings = Settings()
