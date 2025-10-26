@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey # foreignkey for auth
 from sqlalchemy.orm import relationship # for auth
-from .database import Base
+from api.database import Base
 from datetime import datetime
 
 class Book(Base):

@@ -1,30 +1,32 @@
+# api/database.py
+import os
+import sqlalchemy_libsql  # ensures the dialect is registered
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Old: SQLALCHEMY_DATABASE_URL = "sqlite:///./reading_tracker.db"
-# NEW: Use an absolute path relative to the current working directory (project root)
-import os 
-from pathlib import Path
+TURSO_HOST = os.getenv("TURSO_HOST", "reading-tracker-skutm.turso.io")
+TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 
-# Get the absolute path to the project root (where uvicorn is run from)
-BASE_DIR = Path(__file__).resolve().parent.parent 
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{BASE_DIR}/db.sqlite"
+if TURSO_TOKEN:
+    # This is the same pattern that succeeded in your test
+    DATABASE_URL = f"sqlite+libsql://{TURSO_HOST}?secure=true"
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"auth_token": TURSO_TOKEN},
+        pool_pre_ping=True,
+    )
+else:
+    # local fallback
+    DATABASE_URL = "sqlite:///./db.sqlite"
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        pool_pre_ping=True,
+    )
 
-engine = create_engine(
-    # disables default restriction against accessing
-    # from multiple threads, preventing crashes during
-    # concurrent user requests
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-
-# SessionLocal: A factory for creating db sessions
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Base Class: class that our ORM models will inherit from
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
-# Dependency to get a db session
 def get_db():
     db = SessionLocal()
     try:
