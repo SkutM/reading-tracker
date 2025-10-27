@@ -1,4 +1,3 @@
-// src/stores/auth.ts
 import { writable } from "svelte/store";
 import { browser } from "$app/environment";
 import type { UserResponse } from "$lib/types";
@@ -16,7 +15,6 @@ function safeParse<T>(s: string | null): T | null {
   try { return JSON.parse(s) as T; } catch { return null; }
 }
 
-// Prefer `token`, fallback to legacy `accessToken`
 function readToken(): string | null {
   if (!browser) return null;
   return localStorage.getItem("token") ?? localStorage.getItem("accessToken");
@@ -28,7 +26,6 @@ function readUser(): UserResponse | null {
 }
 
 function readEmailFromUser(u: UserResponse | null): string | null {
-  // adjust if your UserResponse uses a different field than `email`
   return u && (u as any).email ? (u as any).email as string : null;
 }
 
@@ -50,7 +47,7 @@ const initial: AuthState = (() => {
 // ---- store ----
 export const auth = writable<AuthState>(initial);
 
-// Persist on change (browser only)
+// persist on change
 auth.subscribe((s) => {
   if (!browser) return;
 

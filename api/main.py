@@ -1,17 +1,14 @@
-# api/main.py
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 import requests
 from fastapi.middleware.cors import CORSMiddleware
 
-# --- Your app modules (package-relative imports) ---
 from api.database import engine, SessionLocal, get_db, Base
 from api import models, auth_models, schemas, auth_routes, jwt_utils
 from api.auth_models import User
 import api.database as db_mod  # only for the debug prints below
 
-# --- One-time debug prints (safe to remove later) ---
 print("DB MODULE FILE:", db_mod.__file__)
 print("ENGINE DIALECT:", engine.dialect.name)
 print("ENGINE URL:", str(engine.url))

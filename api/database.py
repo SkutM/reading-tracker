@@ -1,6 +1,5 @@
-# api/database.py
 import os
-import sqlalchemy_libsql  # registers the 'libsql' dialect
+import sqlalchemy_libsql  # for dialect check
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -18,14 +17,14 @@ TURSO_URL = _normalize_libsql_url(os.getenv("TURSO_DATABASE_URL"))
 TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 
 if TURSO_URL and TURSO_TOKEN:
-    # Turso (remote)
+    # turso (remote)
     engine = create_engine(
         TURSO_URL,
         connect_args={"auth_token": TURSO_TOKEN},
         pool_pre_ping=True,
     )
 else:
-    # Local SQLite fallback
+    # fall back to sqlite otherwise (hopefully doesn't get here)
     engine = create_engine(
         "sqlite:///./db.sqlite",
         connect_args={"check_same_thread": False},

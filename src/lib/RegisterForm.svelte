@@ -25,19 +25,19 @@
     }
 
     try {
-      // 1️⃣ Register new account
+      // register new account
       await registerUser({ username: e, password: p });
 
-      // 2️⃣ Auto-login right after registration
+      // auto-login right after registration
       registeredSuccessfully = true;
       message = '✅ Registration successful! Logging you in...';
 
       const { access_token } = await loginUser({ username: e, password: p });
 
-      // 3️⃣ Create minimal user (no /auth/me needed)
+      // minimal user
       const userData: UserResponse = { id: 0, username: e };
 
-      // 4️⃣ Save globally
+      // save, global
       login(access_token, userData);
 
       message = `Welcome, ${userData.username}! You are now logged in!`;

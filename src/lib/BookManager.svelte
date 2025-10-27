@@ -1,9 +1,6 @@
 <script lang="ts">
-  // Keep prop for compatibility (not used; API reads token from localStorage)
-  // export let accessToken: string | null;
 
   import { createEventDispatcher } from 'svelte';
-  // ⬇️ Use the SAME type source as +page.svelte to avoid mismatch
   import { createBook, updateBook, deleteBook, type Book } from '$lib/api';
 
   const dispatch = createEventDispatcher<{
@@ -11,7 +8,6 @@
     bookDeleted: Book;
   }>();
 
-  // Passed from parent (+page.svelte)
   export let book: Book | undefined = undefined;
   export let isEditMode: boolean = false;
 
@@ -23,7 +19,7 @@
   let message: string | null = null;
   let isError = false;
 
-  // hydrate form when editing
+  // this always checks !! when editing
   $: if (isEditMode && book) {
     title = book.title;
     author = book.author || '';
@@ -32,7 +28,6 @@
   }
 
   function buildCreatePayload() {
-    // match your BookCreate type
     return {
       title,
       author: author || undefined,
@@ -42,10 +37,8 @@
   }
 
   function buildUpdatePayload() {
-    // match your BookUpdate (Partial<BookCreate>)
-    // send only fields that can change
     return {
-      title,                               // include if your API allows title update
+      title,
       author: author || undefined,
       review_text: reviewText || undefined,
       is_recommended: isRecommended
@@ -56,7 +49,6 @@
     isError = false;
     message = isEditMode ? 'Updating review...' : 'Saving new read...';
 
-    // Basic validation for POST
     if (!isEditMode && !title.trim()) {
       message = '❌ Title is required.';
       isError = true;
@@ -77,7 +69,6 @@
       message = `✅ "${saved.title}" ${isEditMode ? 'updated' : 'saved'} successfully!`;
       isError = false;
 
-      // notify parent to update its list
       dispatch('bookUpdated', saved);
     } catch (e: any) {
       message = `❌ Error: ${e?.message ?? 'Request failed'}`;

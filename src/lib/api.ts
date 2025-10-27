@@ -1,23 +1,16 @@
-// src/lib/api.ts
 import { PUBLIC_API_BASE_URL } from '$env/static/public';
 
 const BASE = PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
-/* =========================
-   Helpers
-   ========================= */
-
-// ---- auth header (browser-only) ----
 function authHeader(): Record<string, string> {
   if (typeof window === 'undefined') return {};
-  // Support either key name: 'token' (new) or 'accessToken' (older store)
+  // support either key name: 'token' (new) or 'accessToken' (older store)
   const token =
     localStorage.getItem('token') ||
     localStorage.getItem('accessToken');
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-// ---- headers merge helper (fixes TS issues with HeadersInit spreads) ----
 function mergeHeaders(...parts: (HeadersInit | undefined)[]): Headers {
   const h = new Headers();
   for (const p of parts) {
@@ -28,7 +21,6 @@ function mergeHeaders(...parts: (HeadersInit | undefined)[]): Headers {
   return h;
 }
 
-// ---- safe JSON parsing for text/empty bodies ----
 async function parseJSONSafe(res: Response) {
   const text = await res.text();
   if (!text) return null;
@@ -38,10 +30,6 @@ async function parseJSONSafe(res: Response) {
     return text;
   }
 }
-
-/* =========================
-   Generic API wrapper
-   ========================= */
 
 export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const headers = mergeHeaders(
@@ -53,7 +41,7 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...opts,
     headers,
-    credentials: 'include', // harmless for bearer; useful if you add cookies later
+    credentials: 'include', 
   });
 
   if (!res.ok) {
@@ -77,10 +65,6 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const data = (await parseJSONSafe(res)) as T | null;
   return data as T;
 }
-
-/* =========================
-   AUTH
-   ========================= */
 
 export type LoginResponse = {
   access_token: string;
@@ -106,15 +90,10 @@ export async function registerUser(data: { username: string; password: string })
   });
 }
 
-// Keep if/when you add a profile endpoint later
 export async function getProfile(token?: string) {
   const headers = mergeHeaders(token ? { Authorization: `Bearer ${token}` } : authHeader());
   return api<{ id: number; username: string }>('/auth/profile', { headers });
 }
-
-/* =========================
-   BOOKS
-   ========================= */
 
 export type Book = {
   id: number;
@@ -149,7 +128,6 @@ export async function updateBook(id: number, payload: BookUpdate) {
 }
 
 export async function deleteBook(id: number) {
-  // 204 No Content expected; don't use api<T>()
   const res = await fetch(`${BASE}/books/${id}`, {
     method: 'DELETE',
     headers: mergeHeaders(authHeader()),

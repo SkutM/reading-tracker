@@ -26,7 +26,6 @@
 
   try {
     const { access_token } = await loginUser({ username: e, password: p });
-    // 👇 no profile request — we synthesize a minimal user
     const userData: UserResponse = { id: 0, username: e };
     login(access_token, userData);
 
