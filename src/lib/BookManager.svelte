@@ -1,166 +1,149 @@
 <script lang="ts">
-    export let accessToken: string | null;
-    import type { Book } from '$lib/types';
-    // this below event will be dispatched when a book is
-    // successfully saved, allowing the parent comment
-    // (+page.svelte) to update the book list
-    import { createEventDispatcher } from 'svelte';
-    const dispatch = createEventDispatcher();
 
-    // props to handle existing book data for put/delete
-    // 'book' prop will be passed from parent (+page.svelte) if
-    // we are editing an exisiting book
-    export let book: Book | undefined = undefined;
-    export let isEditMode: boolean = false;
+  import { createEventDispatcher } from 'svelte';
+  import { createBook, updateBook, deleteBook, type Book } from '$lib/api';
 
-    // form state variables
-    let title = '';
-    let author = '';
-    let reviewText = '';
-    let isRecommended = true; // default = thumbs up
-    let message: string | null = null;
-    let isError = false;
+  const dispatch = createEventDispatcher<{
+    bookUpdated: Book;
+    bookDeleted: Book;
+  }>();
 
-    $: if (isEditMode && book) {
-        title = book.title;
-        author = book.author || '';
-        reviewText = book.review_text || '';
-        isRecommended = book.is_recommended ?? true;
+  export let book: Book | undefined = undefined;
+  export let isEditMode: boolean = false;
+
+  // form state variables
+  let title = '';
+  let author = '';
+  let reviewText = '';
+  let isRecommended: boolean = true; // default thumbs up
+  let message: string | null = null;
+  let isError = false;
+
+  // this always checks !! when editing
+  $: if (isEditMode && book) {
+    title = book.title;
+    author = book.author || '';
+    reviewText = book.review_text || '';
+    isRecommended = book.is_recommended ?? true;
+  }
+
+  function buildCreatePayload() {
+    return {
+      title,
+      author: author || undefined,
+      review_text: reviewText || undefined,
+      is_recommended: isRecommended
+    };
+  }
+
+  function buildUpdatePayload() {
+    return {
+      title,
+      author: author || undefined,
+      review_text: reviewText || undefined,
+      is_recommended: isRecommended
+    };
+  }
+
+  async function handleSubmit() {
+    isError = false;
+    message = isEditMode ? 'Updating review...' : 'Saving new read...';
+
+    if (!isEditMode && !title.trim()) {
+      message = '❌ Title is required.';
+      isError = true;
+      return;
     }
 
-    // uses book?.id to determine POST or PUT
-    const endpoint = book ? `/api/books/${book.id}` : '/api/books/';
-    const method = book ? 'PUT' : 'POST';
+    try {
+      let saved: Book;
 
-    async function handleSubmit() {
-        isError = false;
-        message = method === 'POST' ? 'Saving new read...' : 'Updating review...';
-
-        // 1. Build the data obj
-        const bookData = {
-            title,
-            author: author || undefined, // undef = optional (FastAPI)
-            review_text: reviewText || undefined,
-            is_recommended: isRecommended
-        };
-
-        // for POST, all fields must be sent. for PUT, we only
-        // send what might change
-        // const bodyData = method === 'POST' 
-        //   ? bookData 
-        //   : {
-        //     review_text: reviewText,
-        //     is_recommended: isRecommended
-        //   };
-
-        try {
-            // 2. send POST req to FastAPI via proxy
-            const response = await fetch(endpoint, {
-              method: method,
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}` // auth
-              },
-              body: JSON.stringify(bookData)
-            });
-
-            if (!response.ok) {
-                // if error
-                const errorData = await response.json();
-                throw new Error(errorData.detail || `Failed to ${method === 'POST' ? 'save' : 'update'} book.`);
-            }
-
-            const savedBook: Book = await response.json();
-
-            message = `✅ ${savedBook.title} ${method === 'POST' ? 'saved' : 'updated'} successfully!`;
-            isError = false;
-
-            // 3. notify parent component
-            dispatch('bookUpdated', savedBook); // same event for POST & PUT
-        } catch (e: any) {
-            message = `❌ Error: ${e.message}`;
-            isError = true;
-        }
-    }
-
-    async function handleDelete() {
-      // confirmation dialog for safety
-      if (!book || !confirm(`Are you sure you want to delete "${book.title}"? This cannot be undone.`)) {
-        return;
+      if (isEditMode && book) {
+        const payload = buildUpdatePayload();
+        saved = await updateBook(book.id, payload);
+      } else {
+        const payload = buildCreatePayload();
+        saved = await createBook(payload);
       }
 
+      message = `✅ "${saved.title}" ${isEditMode ? 'updated' : 'saved'} successfully!`;
       isError = false;
-      message = 'Deleting book...'
 
-      try {
-        const response = await fetch(`/api/books/${book.id}`, {
-          method: 'DELETE',
-          headers: { // whole headers obj
-            'Authorization': `Bearer ${accessToken}`
-          }
-        });
-
-        if (response.status !== 204) { // delete returns 204
-          throw new Error(`Failed to delete book: Server returned ${response.status}`);
-        }
-
-        message = `🗑️ Deleted "${book.title}" successfully.`;
-        isError = false;
-
-        // notify parent to remove book from list
-        dispatch('bookDeleted', book);
-      
-      } catch (e: any) {
-        message = `❌ Error: ${e.message}`;
-        isError = true;
-      }
+      dispatch('bookUpdated', saved);
+    } catch (e: any) {
+      message = `❌ Error: ${e?.message ?? 'Request failed'}`;
+      isError = true;
     }
+  }
+
+  async function handleDelete() {
+    if (!book) return;
+    if (!confirm(`Are you sure you want to delete "${book.title}"? This cannot be undone.`)) {
+      return;
+    }
+
+    isError = false;
+    message = 'Deleting book...';
+
+    try {
+      await deleteBook(book.id); // 204 No Content expected
+      message = `🗑️ Deleted "${book.title}" successfully.`;
+      isError = false;
+
+      // notify parent to remove it from list
+      dispatch('bookDeleted', book);
+    } catch (e: any) {
+      message = `❌ Error: ${e?.message ?? 'Delete failed'}`;
+      isError = true;
+    }
+  }
 </script>
 
 <div class="form-card">
-    <h2>Add New Read</h2>
-    <form on:submit|preventDefault={handleSubmit}>
-        <label>
-            Title <span class="required">*</span>
-            <input type="text" bind:value={title} required={!isEditMode} />
-        </label>
+  <h2>{isEditMode ? 'Edit Read' : 'Add New Read'}</h2>
 
-        <label>
-            Author
-            <input type="text" bind:value={author} />
-        </label>
+  <form on:submit|preventDefault={handleSubmit}>
+    <label>
+      Title <span class="required">*</span>
+      <input type="text" bind:value={title} required={!isEditMode} />
+    </label>
 
-        <label>
-            Your Review (Max 500 chars)
-            <textarea bind:value={reviewText} maxlength="500"></textarea>
-        </label>
+    <label>
+      Author
+      <input type="text" bind:value={author} />
+    </label>
 
-        <div class="rating toggle">
-            <p>Recommendation:</p>
-            <label>
-                <input type="radio" bind:group={isRecommended} value={true} /> Thumbs Up 👍
-            </label>
-            <label>
-                <input type="radio" bind:group={isRecommended} value={false} /> Thumbs Down 👎
-            </label>
-        </div>
+    <label>
+      Your Review (Max 500 chars)
+      <textarea bind:value={reviewText} maxlength="500"></textarea>
+    </label>
 
-        <div class="button-group">
-          <button type="submit" disabled={!isEditMode && !title}>
-            {isEditMode ? 'Save Changes' : 'Save New Book'}
-          </button>
+    <div class="rating toggle">
+      <p>Recommendation:</p>
+      <label>
+        <input type="radio" bind:group={isRecommended} value={true} /> Thumbs Up 👍
+      </label>
+      <label>
+        <input type="radio" bind:group={isRecommended} value={false} /> Thumbs Down 👎
+      </label>
+    </div>
 
-          {#if isEditMode}
-            <button type="button" on:click={handleDelete} class="delete-button">
-              Delete Book
-            </button>
-          {/if}
-        </div>
-    </form>
+    <div class="button-group">
+      <button type="submit" disabled={!isEditMode && !title}>
+        {isEditMode ? 'Save Changes' : 'Save New Book'}
+      </button>
 
-    {#if message}
+      {#if isEditMode}
+        <button type="button" on:click={handleDelete} class="delete-button">
+          Delete Book
+        </button>
+      {/if}
+    </div>
+  </form>
+
+  {#if message}
     <p class:error={isError} class="message">{message}</p>
-    {/if}
+  {/if}
 </div>
 
 <style>
@@ -172,14 +155,8 @@
     margin: 20px auto;
     max-width: 400px;
   }
-  form {
-    display: grid;
-    gap: 15px;
-  }
-  label {
-    display: grid;
-    font-size: 0.9em;
-  }
+  form { display: grid; gap: 15px; }
+  label { display: grid; font-size: 0.9em; }
   input[type="text"], textarea {
     padding: 10px;
     border-radius: 5px;
@@ -188,9 +165,8 @@
     color: #e6edf3;
     margin-top: 5px;
   }
-  .required {
-    color: #f89582;
-  }
+  .required { color: #f89582; }
+  .button-group { display: flex; gap: 8px; }
   button {
     padding: 12px;
     background: #238636;
@@ -200,13 +176,9 @@
     cursor: pointer;
     transition: background-color 0.2s;
   }
-  button:disabled {
-    background: #30363d;
-    cursor: not-allowed;
-  }
-  .error {
-    color: #f89582;
-  }
+  button:disabled { background: #30363d; cursor: not-allowed; }
+  .delete-button { background: #f85149; }
+  .error { color: #f89582; }
   .message {
     margin-top: 15px;
     padding: 10px;

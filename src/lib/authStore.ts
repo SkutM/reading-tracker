@@ -1,68 +1,101 @@
-import { writable } from 'svelte/store';
-import { browser } from '$app/environment';
-import type { UserResponse } from '$lib/types';
+import { writable } from "svelte/store";
+import { browser } from "$app/environment";
+import type { UserResponse } from "$lib/types";
 
-// define the interface for the global Auth state
-interface AuthState {
-    isAuthenticated: boolean;
-    user: UserResponse | null;
-    token: string | null;
+export type AuthState = {
+  isAuthenticated: boolean;
+  user: UserResponse | null;
+  token: string | null;
+  email: string | null;
+};
+
+// ---- helpers ----
+function safeParse<T>(s: string | null): T | null {
+  if (!s) return null;
+  try { return JSON.parse(s) as T; } catch { return null; }
 }
 
-// helper to safely load data from localStorage
-const getInitialState = (): AuthState => {
-    if (browser) {
-        // attempt to load  token & user data from storage
-        const storedToken = localStorage.getItem('accessToken');
-        const storedUser = localStorage.getItem('currentUser');
+function readToken(): string | null {
+  if (!browser) return null;
+  return localStorage.getItem("token") ?? localStorage.getItem("accessToken");
+}
 
-        if (storedToken && storedUser) {
-            try {
-                return {
-                    isAuthenticated: true,
-                    user: JSON.parse(storedUser) as UserResponse,
-                    token: storedToken
-                };
-            } catch (e) {
-                // clear storage if parsing fails
-                localStorage.clear();
-            }
-        }
-    }
-    return { isAuthenticated: false, user: null, token: null}
-};
+function readUser(): UserResponse | null {
+  if (!browser) return null;
+  return safeParse<UserResponse>(localStorage.getItem("currentUser"));
+}
 
-// create the writable store w/ the initial state
-export const authStore = writable<AuthState>(getInitialState());
+function readEmailFromUser(u: UserResponse | null): string | null {
+  return u && (u as any).email ? (u as any).email as string : null;
+}
 
-// actions (fncts to modify the store)
+const initial: AuthState = (() => {
+  const token = readToken();
+  const user = readUser();
+  const email =
+    (browser && localStorage.getItem("email")) ||
+    readEmailFromUser(user);
 
-// 1. log the user in (called after succesful login POST)
-export const login = (token: string, user: UserResponse) => {
-    authStore.set({
-        isAuthenticated: true,
-        user: user,
-        token: token
-    });
+  return {
+    isAuthenticated: !!token && (!!user || !!email),
+    user,
+    token,
+    email: email ?? null,
+  };
+})();
 
-    // persist data for session management (safe only in browser)
-    if (browser) {
-        localStorage.setItem('accessToken', token);
-        localStorage.setItem('currentUser', JSON.stringify(user));
-    }
-};
+// ---- store ----
+export const auth = writable<AuthState>(initial);
 
-// 2. log the user out (when clicks 'logout')
-export const logout = () => {
-    authStore.set({
-        isAuthenticated: false,
-        user: null,
-        token: null
-    });
+// persist on change
+auth.subscribe((s) => {
+  if (!browser) return;
 
-    // clear persisted data
-    if (browser) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('currentUser');
-    }
+  // keep both keys in sync for compatibility
+  if (s.token) {
+    localStorage.setItem("token", s.token);
+    localStorage.setItem("accessToken", s.token);
+  } else {
+    localStorage.removeItem("token");
+    localStorage.removeItem("accessToken");
+  }
+
+  if (s.user) {
+    localStorage.setItem("currentUser", JSON.stringify(s.user));
+  } else {
+    localStorage.removeItem("currentUser");
+  }
+
+  if (s.email) {
+    localStorage.setItem("email", s.email);
+  } else {
+    localStorage.removeItem("email");
+  }
+});
+
+// ---- actions ----
+export function login(token: string, user: UserResponse) {
+  const email = readEmailFromUser(user);
+  auth.set({
+    isAuthenticated: true,
+    user,
+    token,
+    email: email ?? null,
+  });
+}
+
+export function logout() {
+  auth.set({
+    isAuthenticated: false,
+    user: null,
+    token: null,
+    email: null,
+  });
+
+  if (browser) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("currentUser");
+    localStorage.removeItem("email");
+  }
 }

@@ -2,16 +2,17 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 import requests
-from fastapi.middleware.cors import CORSMiddleware # for auth middleware
+from fastapi.middleware.cors import CORSMiddleware
 
-# auth
-from . import auth_routes
-from . import jwt_utils
-from .auth_models import User # need User model for type hinting/relationships
+from api.database import engine, SessionLocal, get_db, Base
+from api import models, auth_models, schemas, auth_routes, jwt_utils
+from api.auth_models import User
+import api.database as db_mod  # only for the debug prints below
 
-# database and model defs
-from . import models, schemas
-from .database import SessionLocal, engine, get_db
+print("DB MODULE FILE:", db_mod.__file__)
+print("ENGINE DIALECT:", engine.dialect.name)
+print("ENGINE URL:", str(engine.url))
+
 
 # alembic handles tables created if they don't alr exist
 
@@ -49,17 +50,21 @@ def fetch_book_cover(title: str, author: str) -> str | None:
 # fast api init
 app = FastAPI()
 
+@app.on_event("startup")
+def _create_tables():
+    Base.metadata.create_all(bind=engine)
+
 # auth cors middleware
 # OPTIONS pre-flight checks, even with Vite proxy
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
+    "https://reading-tracker-qahrn94mu-scotts-projects-69acb861.vercel.app",
 ]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -68,7 +73,12 @@ app.add_middleware(
 # auth router
 app.include_router(auth_routes.auth_router)
 
-
+# db health check
+@app.get("/ping-db")
+def ping_db():
+    with engine.connect() as conn:
+        conn.exec_driver_sql("SELECT 1;")
+    return {"db": "online"}
 
 # Endpoint to check API status
 @app.get("/")
