@@ -26,7 +26,7 @@ if TURSO_URL and TURSO_TOKEN:
 else:
     # fall back to sqlite otherwise (hopefully doesn't get here)
     engine = create_engine(
-        "sqlite:///./db.sqlite",
+        "sqlite:///../db.sqlite",
         connect_args={"check_same_thread": False},
         pool_pre_ping=True,
     )
