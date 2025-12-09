@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.database import engine, SessionLocal, get_db, Base
 from api import models, auth_models, schemas, auth_routes, jwt_utils
 from api.auth_models import User
+from api.routers import health, feed
 import api.database as db_mod  # only for the debug prints below
 
 print("DB MODULE FILE:", db_mod.__file__)
