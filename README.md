@@ -32,7 +32,7 @@ To run this application on your local machine, you need Node.js (for the fronten
 
 ```sh
 # Clone the repository
-git clone [YOUR REPO URL HERE]
+git clone https://github.com/SkutM/reading-tracker
 cd full-stack-svelte-project
 
 # Install Node dependencies (SvelteKit/Vite)
@@ -61,7 +61,7 @@ cd ..
 
 ### 3. Database Migration
 
-The database structure must be created from your models.
+The database structure must be created from models.
 
 ```sh
 # Navigate back to the API folder to run Alembic
