@@ -74,6 +74,10 @@ app.add_middleware(
 # auth router
 app.include_router(auth_routes.auth_router)
 
+# social readia / infra routers
+app.include_router(health.router)
+app.include_router(feed.router)
+
 # db health check
 @app.get("/ping-db")
 def ping_db():
