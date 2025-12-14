@@ -51,10 +51,6 @@ def fetch_book_cover(title: str, author: str) -> str | None:
 # fast api init
 app = FastAPI()
 
-@app.on_event("startup")
-def _create_tables():
-    Base.metadata.create_all(bind=engine)
-
 # auth cors middleware
 # OPTIONS pre-flight checks, even with Vite proxy
 origins = [
@@ -70,6 +66,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+@app.on_event("startup")
+def _create_tables():
+    Base.metadata.create_all(bind=engine)
+
 
 # auth router
 app.include_router(auth_routes.auth_router)
