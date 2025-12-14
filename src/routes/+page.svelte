@@ -6,6 +6,7 @@
   import RegisterForm from '$lib/RegisterForm.svelte';
   import LoginForm from '$lib/LoginForm.svelte';
   import { listBooks } from '$lib/api';
+  import BootGate from '$lib/components/BootGate.svelte';
 
   // derive auth state from store
   let isAuthenticated = false;
@@ -83,6 +84,7 @@
     bookToEdit = undefined;
   }
 </script>
+<BootGate />
 
 <svelte:head>
   <title>Reading Tracker</title>
