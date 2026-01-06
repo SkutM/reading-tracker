@@ -17,6 +17,12 @@
   $: currentUser = $authStore.user;
   $: accessToken = $authStore.token;
 
+  // boot gate
+  let bootReady = false;
+  function handleBootReady() {
+    bootReady = true;
+  }
+
   // UI state
   let showRegistration = false;
   let books: Book[] = [];
@@ -56,10 +62,16 @@
     }
   }
 
-  // react to token changes
-  $: if (accessToken) {
+  // react to token changes (only AFTER bootReady)
+  let lastToken: string | null = null;
+
+  $: if (!bootReady) {
+    loading = true;
+  } else if (accessToken && accessToken !== lastToken) {
+    lastToken = accessToken;
     fetchBooks();
-  } else {
+  } else if (!accessToken) {
+    lastToken = null;
     books = [];
     loading = false;
   }
@@ -84,119 +96,122 @@
     bookToEdit = undefined;
   }
 </script>
-<BootGate />
-
 <svelte:head>
   <title>Reading Tracker</title>
 </svelte:head>
 
-<div class="main-container">
-  <h1>Reading Tracker</h1>
-  <p>Track and review your favorite books!</p>
+{#if !bootReady}
+  <BootGate onReady={handleBootReady} />
+{:else}
 
-  <div class="auth-bar">
-    {#if isAuthenticated && currentUser}
-      <span class="welcome-msg">
-        Welcome, {currentUser.username ?? $authStore.email ?? 'Reader'}!
-      </span>
-      <button on:click={logout} class="logout-btn">Log Out</button>
-    {:else}
-      <span class="welcome-msg">Please Log In to continue.</span>
-    {/if}
-  </div>
+  <div class="main-container">
+    <h1>Reading Tracker</h1>
+    <p>Track and review your favorite books!</p>
 
-  {#if isAuthenticated}
-    <button on:click={() => { showForm = !showForm; bookToEdit = undefined; }}>
-      {#if showForm} Close Form ☝️ {:else} + Add New Read {/if}
-    </button>
-
-    {#if showForm}
-      <!-- No accessToken prop needed -->
-      <BookManager on:bookUpdated={handleBookSaved} />
-    {:else if bookToEdit}
-      <BookManager
-        book={bookToEdit}
-        isEditMode={true}
-        on:bookUpdated={handleBookUpdated}
-        on:bookDeleted={handleBookDeleted}
-      />
-    {/if}
-
-    {#if loading}
-      <p>Loading your reads...</p>
-    {:else if error}
-      <p class="error">Error: {error}</p>
-    {:else if books.length === 0}
-      <p class="no-books">You haven't added any books yet.</p>
-    {:else}
-      <div class="book-grid">
-        {#each books as book (book.id)}
-          <div
-            class="book-box"
-            class:is-flipped={book.id === flippedBookId}
-            on:click={() => toggleFlip(book.id)}
-            role="button"
-            tabindex="0"
-            on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleFlip(book.id); }}
-          >
-            <div class="flipper">
-              <div class="front">
-                <h2>{book.title}</h2>
-                <p>by {book.author || 'Unknown Author'}</p>
-
-                {#if book.cover_image_url}
-                  <img src={book.cover_image_url} alt={`Cover for ${book.title}`} class="book-cover" />
-                {/if}
-
-                <div class="rating">
-                  {#if book.is_recommended === true}
-                    <span class="thumb-up">Recommended 👍</span>
-                  {:else if book.is_recommended === false}
-                    <span class="thumb-down">Not Recommended 👎</span>
-                  {:else}
-                    <span class="thumb-neutral">No Rating</span>
-                  {/if}
-                </div>
-                <p class="read-on">Read: {formatDateISO(book.read_on)}</p>
-                <p class="click-hint">(Click to see review)</p>
-              </div>
-
-              <div class="back">
-                <h3>{book.title} Review</h3>
-                <p class="review-text">
-                  {#if book.review_text}{book.review_text}{:else}No review written yet.{/if}
-                </p>
-                <button
-                  type="button"
-                  on:click|stopPropagation={() => { bookToEdit = book; showForm = false; }}
-                  class="edit-btn"
-                >
-                  Edit Reflection
-                </button>
-              </div>
-            </div>
-          </div>
-        {/each}
-      </div>
-    {/if}
-  {:else}
-    <div class="auth-toggle-container">
-      {#if showRegistration}
-        <RegisterForm />
-        <p class="small-link">
-          Already have an account?
-          <button type="button" class="linklike" on:click={() => (showRegistration = false)}>Log In</button>
-        </p>
+    <div class="auth-bar">
+      {#if isAuthenticated && currentUser}
+        <span class="welcome-msg">
+          Welcome, {currentUser.username ?? $authStore.email ?? 'Reader'}!
+        </span>
+        <button on:click={logout} class="logout-btn">Log Out</button>
       {:else}
-        <LoginForm />
-        <p class="small-link">
-          Need an account?
-          <button type="button" class="linklike" on:click={() => (showRegistration = true)}>Register Here</button>
-        </p>
+        <span class="welcome-msg">Please Log In to continue.</span>
       {/if}
     </div>
-  {/if}
-</div>
+
+    {#if isAuthenticated}
+      <button on:click={() => { showForm = !showForm; bookToEdit = undefined; }}>
+        {#if showForm} Close Form ☝️ {:else} + Add New Read {/if}
+      </button>
+
+      {#if showForm}
+        <!-- No accessToken prop needed -->
+        <BookManager on:bookUpdated={handleBookSaved} />
+      {:else if bookToEdit}
+        <BookManager
+          book={bookToEdit}
+          isEditMode={true}
+          on:bookUpdated={handleBookUpdated}
+          on:bookDeleted={handleBookDeleted}
+        />
+      {/if}
+
+      {#if loading}
+        <p>Loading your reads...</p>
+      {:else if error}
+        <p class="error">Error: {error}</p>
+      {:else if books.length === 0}
+        <p class="no-books">You haven't added any books yet.</p>
+      {:else}
+        <div class="book-grid">
+          {#each books as book (book.id)}
+            <div
+              class="book-box"
+              class:is-flipped={book.id === flippedBookId}
+              on:click={() => toggleFlip(book.id)}
+              role="button"
+              tabindex="0"
+              on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleFlip(book.id); }}
+            >
+              <div class="flipper">
+                <div class="front">
+                  <h2>{book.title}</h2>
+                  <p>by {book.author || 'Unknown Author'}</p>
+
+                  {#if book.cover_image_url}
+                    <img src={book.cover_image_url} alt={`Cover for ${book.title}`} class="book-cover" />
+                  {/if}
+
+                  <div class="rating">
+                    {#if book.is_recommended === true}
+                      <span class="thumb-up">Recommended 👍</span>
+                    {:else if book.is_recommended === false}
+                      <span class="thumb-down">Not Recommended 👎</span>
+                    {:else}
+                      <span class="thumb-neutral">No Rating</span>
+                    {/if}
+                  </div>
+                  <p class="read-on">Read: {formatDateISO(book.read_on)}</p>
+                  <p class="click-hint">(Click to see review)</p>
+                </div>
+
+                <div class="back">
+                  <h3>{book.title} Review</h3>
+                  <p class="review-text">
+                    {#if book.review_text}{book.review_text}{:else}No review written yet.{/if}
+                  </p>
+                  <button
+                    type="button"
+                    on:click|stopPropagation={() => { bookToEdit = book; showForm = false; }}
+                    class="edit-btn"
+                  >
+                    Edit Reflection
+                  </button>
+                </div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    {:else}
+      <div class="auth-toggle-container">
+        {#if showRegistration}
+          <RegisterForm />
+          <p class="small-link">
+            Already have an account?
+            <button type="button" class="linklike" on:click={() => (showRegistration = false)}>Log In</button>
+          </p>
+        {:else}
+          <LoginForm />
+          <p class="small-link">
+            Need an account?
+            <button type="button" class="linklike" on:click={() => (showRegistration = true)}>Register Here</button>
+          </p>
+        {/if}
+      </div>
+    {/if}
+  </div>
+{/if}
 
 <style>
   :global(body) { background-color: #0d1117; }
