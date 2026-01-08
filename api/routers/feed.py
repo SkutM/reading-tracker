@@ -1,8 +1,11 @@
+# api/routers/feed.py
+
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..jwt_utils import get_current_user
+from ..auth_models import User
 from ..services.feed import (
     get_public_feed,
     get_public_feed_item,
@@ -52,7 +55,7 @@ def public_feed_item(book_id: int, db: Session = Depends(get_db)):
 def like_post(
     book_id: int,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     try:
         like_count = set_like(db, user_id=user.id, book_id=book_id)
@@ -65,7 +68,7 @@ def like_post(
 def unlike_post(
     book_id: int,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     try:
         like_count = unset_like(db, user_id=user.id, book_id=book_id)
@@ -78,7 +81,9 @@ def unlike_post(
 def liked_status(
     book_id: int,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    # optional but super handy for UI
-    return {"book_id": book_id, "liked": has_liked(db, user_id=user.id, book_id=book_id)}
+    return {
+        "book_id": book_id,
+        "liked": has_liked(db, user_id=user.id, book_id=book_id),
+    }

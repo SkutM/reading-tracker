@@ -194,14 +194,41 @@ def has_liked(db: Session, user_id: int, book_id: int) -> bool:
         is not None
     )
 
+
+def set_like(db: Session, user_id: int, book_id: int) -> int:
+    """
+    Ensure user has liked this post (idempotent).
+    Returns the new like_count.
+    Raises ValueError if post doesn't exist / isn't public.
+    """
+    book = _get_public_book_for_engagement(db, book_id)
+    if not book:
+        raise ValueError("Post not found")
+
+    existing = (
+        db.query(Like)
+        .filter(Like.user_id == user_id, Like.review_id == book_id)
+        .first()
+    )
+    if existing:
+        return book.like_count or 0
+
+    db.add(Like(user_id=user_id, review_id=book_id))
+    book.like_count = (book.like_count or 0) + 1
+    db.commit()
+    db.refresh(book)
+    return book.like_count or 0
+
+
 def unset_like(db: Session, user_id: int, book_id: int) -> int:
     """
-    Ensure user has unliked this book (idempotent).
-    Returns the new like_count for the book.
+    Ensure user has unliked this post (idempotent).
+    Returns the new like_count.
+    Raises ValueError if post doesn't exist / isn't public.
     """
-    book = db.query(Book).filter(Book.id == book_id).first()
+    book = _get_public_book_for_engagement(db, book_id)
     if not book:
-        raise ValueError("Book not found")
+        raise ValueError("Post not found")
 
     existing = (
         db.query(Like)
@@ -216,46 +243,3 @@ def unset_like(db: Session, user_id: int, book_id: int) -> int:
     db.commit()
     db.refresh(book)
     return book.like_count or 0
-
-
-
-def set_like(db: Session, *, book_id: int, user_id: int, value: bool) -> Optional[Dict[str, Any]]:
-    """
-    Toggle like state (idempotent).
-    - value=True  => ensure liked
-    - value=False => ensure unliked
-
-    Returns a small payload your frontend can use immediately:
-    { "book_id": int, "liked": bool, "like_count": int }
-
-    Returns None if post isn't public / doesn't exist.
-    """
-    book = _get_public_book_for_engagement(db, book_id)
-    if not book:
-        return None
-
-    existing = (
-        db.query(Like)
-        .filter(Like.user_id == user_id, Like.review_id == book_id)
-        .first()
-    )
-
-    if value is True:
-        if existing:
-            return {"book_id": book_id, "liked": True, "like_count": book.like_count or 0}
-
-        db.add(Like(user_id=user_id, review_id=book_id))
-        book.like_count = (book.like_count or 0) + 1
-        db.commit()
-        db.refresh(book)
-        return {"book_id": book_id, "liked": True, "like_count": book.like_count or 0}
-
-    # value is False
-    if not existing:
-        return {"book_id": book_id, "liked": False, "like_count": book.like_count or 0}
-
-    db.delete(existing)
-    book.like_count = max(0, (book.like_count or 0) - 1)
-    db.commit()
-    db.refresh(book)
-    return {"book_id": book_id, "liked": False, "like_count": book.like_count or 0}
