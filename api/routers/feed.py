@@ -2,7 +2,14 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..services.feed import get_public_feed, get_public_feed_item
+from ..jwt_utils import get_current_user
+from ..services.feed import (
+    get_public_feed,
+    get_public_feed_item,
+    set_like,
+    unset_like,
+    has_liked,
+)
 
 router = APIRouter(prefix="/feed", tags=["feed"])
 
@@ -35,3 +42,43 @@ def public_feed_item(book_id: int, db: Session = Depends(get_db)):
     if not item:
         raise HTTPException(status_code=404, detail="Post not found")
     return item
+
+
+# -------------------------
+# Likes (requires auth)
+# -------------------------
+
+@router.post("/{book_id}/like")
+def like_post(
+    book_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    try:
+        like_count = set_like(db, user_id=user.id, book_id=book_id)
+        return {"book_id": book_id, "liked": True, "like_count": like_count}
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+
+@router.delete("/{book_id}/like")
+def unlike_post(
+    book_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    try:
+        like_count = unset_like(db, user_id=user.id, book_id=book_id)
+        return {"book_id": book_id, "liked": False, "like_count": like_count}
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+
+@router.get("/{book_id}/liked")
+def liked_status(
+    book_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    # optional but super handy for UI
+    return {"book_id": book_id, "liked": has_liked(db, user_id=user.id, book_id=book_id)}

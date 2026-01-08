@@ -1,10 +1,14 @@
+# api/services/feed.py
+
+from __future__ import annotations
+
 from datetime import date
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict, Any
 
 from sqlalchemy import and_, desc, asc, func
 from sqlalchemy.orm import Session
 
-from api.models import Book
+from api.models import Book, Like
 from api.auth_models import User
 
 
@@ -34,7 +38,7 @@ def get_public_feed(
     review_type: Optional[str] = None,
     limit: int = 20,
     after: Optional[str] = None,
-):
+) -> Dict[str, Any]:
     cursor = _parse_cursor(after)
 
     q = (
@@ -56,8 +60,8 @@ def get_public_feed(
         order_cols = (asc(Book.review_date), asc(Book.id))
         if cursor:
             q = q.filter(
-                (Book.review_date > cursor[0]) |
-                and_(Book.review_date == cursor[0], Book.id > cursor[1])
+                (Book.review_date > cursor[0])
+                | and_(Book.review_date == cursor[0], Book.id > cursor[1])
             )
 
     elif sort == "review_length":
@@ -67,11 +71,12 @@ def get_public_feed(
         order_cols = (asc(Book.review_type), desc(Book.review_date), desc(Book.id))
 
     else:
+        # newest
         order_cols = (desc(Book.review_date), desc(Book.id))
         if cursor:
             q = q.filter(
-                (Book.review_date < cursor[0]) |
-                and_(Book.review_date == cursor[0], Book.id < cursor[1])
+                (Book.review_date < cursor[0])
+                | and_(Book.review_date == cursor[0], Book.id < cursor[1])
             )
 
     q = q.order_by(*order_cols).limit(min(limit, 50))
@@ -93,6 +98,7 @@ def get_public_feed(
                     "title": b.title,
                     "author": b.author,
                     "genre": getattr(b, "genre", None),
+                    "cover_image_url": getattr(b, "cover_image_url", None),
                 },
                 "author": {
                     "id": b.owner.id if b.owner else None,
@@ -118,11 +124,7 @@ def get_public_feed(
 # Public feed (DETAIL – single item)
 # --------------------------------------------------
 
-def get_public_feed_item(db: Session, book_id: int):
-    """
-    Fetch a single PUBLIC feed item with full review body.
-    Returns None if not found or not public.
-    """
+def get_public_feed_item(db: Session, book_id: int) -> Optional[Dict[str, Any]]:
     book = (
         db.query(Book)
         .join(User, Book.owner_id == User.id)
@@ -160,3 +162,100 @@ def get_public_feed_item(db: Session, book_id: int):
         "comment_count": book.comment_count or 0,
         "created_at": book.created_at.isoformat() if book.created_at else None,
     }
+
+
+# --------------------------------------------------
+# Likes (service helpers)
+# --------------------------------------------------
+
+def _get_public_book_for_engagement(db: Session, book_id: int) -> Optional[Book]:
+    """
+    Used for like/unlike. Enforces:
+    - Book is PUBLIC
+    - Owner profile is PUBLIC
+    """
+    return (
+        db.query(Book)
+        .join(User, Book.owner_id == User.id)
+        .filter(
+            Book.id == book_id,
+            Book.visibility == "PUBLIC",
+            User.profile_visibility == "PUBLIC",
+        )
+        .first()
+    )
+
+
+def has_liked(db: Session, user_id: int, book_id: int) -> bool:
+    return (
+        db.query(Like)
+        .filter(Like.user_id == user_id, Like.review_id == book_id)
+        .first()
+        is not None
+    )
+
+def unset_like(db: Session, user_id: int, book_id: int) -> int:
+    """
+    Ensure user has unliked this book (idempotent).
+    Returns the new like_count for the book.
+    """
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise ValueError("Book not found")
+
+    existing = (
+        db.query(Like)
+        .filter(Like.user_id == user_id, Like.review_id == book_id)
+        .first()
+    )
+    if not existing:
+        return book.like_count or 0
+
+    db.delete(existing)
+    book.like_count = max(0, (book.like_count or 0) - 1)
+    db.commit()
+    db.refresh(book)
+    return book.like_count or 0
+
+
+
+def set_like(db: Session, *, book_id: int, user_id: int, value: bool) -> Optional[Dict[str, Any]]:
+    """
+    Toggle like state (idempotent).
+    - value=True  => ensure liked
+    - value=False => ensure unliked
+
+    Returns a small payload your frontend can use immediately:
+    { "book_id": int, "liked": bool, "like_count": int }
+
+    Returns None if post isn't public / doesn't exist.
+    """
+    book = _get_public_book_for_engagement(db, book_id)
+    if not book:
+        return None
+
+    existing = (
+        db.query(Like)
+        .filter(Like.user_id == user_id, Like.review_id == book_id)
+        .first()
+    )
+
+    if value is True:
+        if existing:
+            return {"book_id": book_id, "liked": True, "like_count": book.like_count or 0}
+
+        db.add(Like(user_id=user_id, review_id=book_id))
+        book.like_count = (book.like_count or 0) + 1
+        db.commit()
+        db.refresh(book)
+        return {"book_id": book_id, "liked": True, "like_count": book.like_count or 0}
+
+    # value is False
+    if not existing:
+        return {"book_id": book_id, "liked": False, "like_count": book.like_count or 0}
+
+    db.delete(existing)
+    book.like_count = max(0, (book.like_count or 0) - 1)
+    db.commit()
+    db.refresh(book)
+    return {"book_id": book_id, "liked": False, "like_count": book.like_count or 0}

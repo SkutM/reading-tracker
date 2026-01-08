@@ -1,5 +1,6 @@
 <script lang="ts">
   import BootGate from '$lib/components/BootGate.svelte';
+  import { auth as authStore } from '$lib/authStore';
 
   let bootReady = false;
 
@@ -39,6 +40,17 @@
   let loading = true;
   let error: string | null = null;
   let nextCursor: string | null = null;
+
+  // ---- Auth state (for likes) ----
+  let accessToken: string | null = null;
+  let isAuthenticated = false;
+
+  $: accessToken = $authStore.token;
+  $: isAuthenticated = $authStore.isAuthenticated;
+
+  // per-item like UI state
+  let liked: Record<number, boolean> = {};
+  let liking: Record<number, boolean> = {};
 
   function buildFeedURL(after: string | null = null) {
     const url = new URL(`${API_BASE}/feed`);
@@ -88,8 +100,48 @@
     const d = new Date(s);
     return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
   }
-</script>
 
+  async function toggleLike(e: Event, bookId: number) {
+    // IMPORTANT: your whole card is wrapped in <a>, prevent navigation
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isAuthenticated || !accessToken) {
+      alert('Log in to like posts.');
+      return;
+    }
+
+    liking = { ...liking, [bookId]: true };
+
+    const currentlyLiked = !!liked[bookId];
+    const method = currentlyLiked ? 'DELETE' : 'POST';
+
+    try {
+      const res = await fetch(`${API_BASE}/feed/${bookId}/like`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!res.ok) throw new Error(`Like request failed (${res.status})`);
+
+      const data = await res.json(); // { liked: boolean, like_count: number }
+
+      liked = { ...liked, [bookId]: !!data.liked };
+
+      // update the visible count in the feed list
+      items = items.map((it) =>
+        it.id === bookId ? { ...it, like_count: data.like_count ?? it.like_count } : it
+      );
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update like.');
+    } finally {
+      liking = { ...liking, [bookId]: false };
+    }
+  }
+</script>
 
 {#if !bootReady}
   <BootGate onReady={() => (bootReady = true)} />
@@ -100,7 +152,6 @@
       <a class="backlink" href="/">← Home</a>
     </div>
 
-    <!-- ✅ Step 2: Controls bar (paste this) -->
     <div class="controls">
       <div class="control">
         <label for="sort">Sort</label>
@@ -140,7 +191,6 @@
         Apply
       </button>
     </div>
-    <!-- ✅ end controls -->
 
     {#if loading && items.length === 0}
       <p class="muted">Loading feed…</p>
@@ -151,35 +201,44 @@
     {:else}
       <ul class="list">
         {#each items as it (it.id)}
-            <li>
-                <a class="cardlink" href={`/feed/${it.id}`}>
-                <div class="card">
-                    <div class="row">
-                    <div class="left">
-                        <div class="title">
-                        {it.book.title}{#if it.book.author} — {it.book.author}{/if}
-                        </div>
-
-                        <div class="meta">
-                        @{it.author.username ?? 'reader'}
-                        {#if it.review_date} • {formatDate(it.review_date)}{/if}
-                        {#if it.review_type} • {it.review_type}{/if}
-                        </div>
+          <li>
+            <a class="cardlink" href={`/feed/${it.id}`}>
+              <div class="card">
+                <div class="row">
+                  <div class="left">
+                    <div class="title">
+                      {it.book.title}{#if it.book.author} — {it.book.author}{/if}
                     </div>
 
-                    <div class="right">
-                        <div>❤️ {it.like_count}</div>
-                        <div>💬 {it.comment_count}</div>
+                    <div class="meta">
+                      @{it.author.username ?? 'reader'}
+                      {#if it.review_date} • {formatDate(it.review_date)}{/if}
+                      {#if it.review_type} • {it.review_type}{/if}
                     </div>
-                    </div>
+                  </div>
 
-                    {#if it.body_preview}
-                    <p class="body">{it.body_preview}</p>
-                    {/if}
+                  <div class="right">
+                    <div>❤️ {it.like_count}</div>
+                    <div>💬 {it.comment_count}</div>
+
+                    <button
+                      type="button"
+                      class="likebtn"
+                      disabled={!!liking[it.id]}
+                      on:click={(e) => toggleLike(e, it.id)}
+                    >
+                      {liked[it.id] ? '♥ Liked' : '♡ Like'}
+                    </button>
+                  </div>
                 </div>
-                </a>
-            </li>
-            {/each}
+
+                {#if it.body_preview}
+                  <p class="body">{it.body_preview}</p>
+                {/if}
+              </div>
+            </a>
+          </li>
+        {/each}
       </ul>
 
       {#if nextCursor}
@@ -190,7 +249,6 @@
     {/if}
   </main>
 {/if}
-
 
 <style>
   :global(body) { background-color: #0d1117; }
@@ -215,7 +273,8 @@
   .row { display: flex; justify-content: space-between; gap: 12px; }
   .title { font-weight: 700; }
   .meta { font-size: 0.9rem; color: #8b949e; margin-top: 3px; }
-  .right { text-align: right; color: #c9d1d9; font-size: 0.95rem; }
+
+  .right { text-align: right; color: #c9d1d9; font-size: 0.95rem; min-width: 120px; }
 
   .body { margin: 10px 0 0; color: #c9d1d9; white-space: pre-wrap; }
 
@@ -233,93 +292,95 @@
   .more:disabled { opacity: 0.7; cursor: not-allowed; }
 
   .controls {
-  margin-top: 10px;
-  margin-bottom: 10px;
-  padding: 12px;
-  border: 1px solid #30363d;
-  border-radius: 10px;
-  background: #1c1f24;
-  display: grid;
-  grid-template-columns: 1.2fr 1.2fr 2fr 0.8fr auto;
-  gap: 10px;
-  align-items: end;
-}
-
-.controls .control:nth-child(3) {
-  max-width: 280px;
-}
-
-
-.control label {
-  display: block;
-  font-size: 0.8rem;
-  color: #8b949e;
-  margin-bottom: 6px;
-}
-
-.control input,
-.control select {
-  width: 100%;
-  padding: 10px 7px;
-  border-radius: 8px;
-  border: 1px solid #30363d;
-  background: #0d1117;
-  color: #e6edf3;
-}
-
-.control select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-}
-
-.control select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 14px;
-}
-
-.cardlink {
-  display: block;
-  color: inherit;
-  text-decoration: none;
-}
-
-.cardlink:hover .card {
-  filter: brightness(1.05);
-}
-
-.cardlink:focus-visible {
-  outline: 2px solid #a5b816;
-  outline-offset: 4px;
-  border-radius: 12px;
-}
-
-
-
-.control.small { max-width: 120px; }
-
-.apply {
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  background: #238636;
-  color: white;
-  font-weight: 600;
-  height: 42px;
-}
-
-.apply:hover { background: #2ea043; }
-.apply:disabled { opacity: 0.7; cursor: not-allowed; }
-
-@media (max-width: 860px) {
-  .controls {
-    grid-template-columns: 1fr 1fr;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    background: #1c1f24;
+    display: grid;
+    grid-template-columns: 1.2fr 1.2fr 2fr 0.8fr auto;
+    gap: 10px;
+    align-items: end;
   }
-  .control.small { max-width: none; }
-  .apply { grid-column: span 2; }
-}
 
+  .controls .control:nth-child(3) { max-width: 280px; }
+
+  .control label {
+    display: block;
+    font-size: 0.8rem;
+    color: #8b949e;
+    margin-bottom: 6px;
+  }
+
+  .control input,
+  .control select {
+    width: 100%;
+    padding: 10px 7px;
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #e6edf3;
+  }
+
+  .control select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 14px;
+  }
+
+  .cardlink {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .cardlink:hover .card { filter: brightness(1.05); }
+
+  .cardlink:focus-visible {
+    outline: 2px solid #a5b816;
+    outline-offset: 4px;
+    border-radius: 12px;
+  }
+
+  .control.small { max-width: 120px; }
+
+  .apply {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    background: #238636;
+    color: white;
+    font-weight: 600;
+    height: 42px;
+  }
+
+  .apply:hover { background: #2ea043; }
+  .apply:disabled { opacity: 0.7; cursor: not-allowed; }
+
+  /* --- Like button --- */
+  .likebtn {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #e6edf3;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  .likebtn:hover { filter: brightness(1.05); }
+  .likebtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  @media (max-width: 860px) {
+    .controls { grid-template-columns: 1fr 1fr; }
+    .control.small { max-width: none; }
+    .apply { grid-column: span 2; }
+  }
 </style>
