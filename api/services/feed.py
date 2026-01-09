@@ -8,7 +8,7 @@ from typing import Optional, Tuple, List, Dict, Any
 from sqlalchemy import and_, desc, asc, func
 from sqlalchemy.orm import Session
 
-from api.models import Book, Like
+from api.models import Book, Like, Comment
 from api.auth_models import User
 
 
@@ -243,3 +243,90 @@ def unset_like(db: Session, user_id: int, book_id: int) -> int:
     db.commit()
     db.refresh(book)
     return book.like_count or 0
+
+# --------------------------------------------------
+# Comments (service helpers)
+# --------------------------------------------------
+
+def list_comments(db: Session, book_id: int) -> list[dict]:
+    """
+    Public: list comments for a book (oldest -> newest).
+    Returns [] if book doesn't exist or isn't public.
+    """
+    # enforce same public rules as feed
+    book = (
+        db.query(Book)
+        .join(User, Book.owner_id == User.id)
+        .filter(
+            Book.id == book_id,
+            Book.visibility == "PUBLIC",
+            User.profile_visibility == "PUBLIC",
+        )
+        .first()
+    )
+    if not book:
+        return []
+
+    rows = (
+        db.query(Comment, User)
+        .join(User, Comment.user_id == User.id)
+        .filter(Comment.review_id == book_id)
+        .order_by(Comment.created_at.asc(), Comment.id.asc())
+        .all()
+    )
+
+    out: list[dict] = []
+    for c, u in rows:
+        out.append(
+            {
+                "id": c.id,
+                "book_id": c.review_id,
+                "user": {"id": u.id, "username": u.username},
+                "body": c.body,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+        )
+    return out
+
+
+def add_comment(db: Session, user_id: int, book_id: int, body: str) -> dict:
+    """
+    Auth: add a comment (returns created comment as dict).
+    Raises ValueError if post not found or not public.
+    """
+    body = (body or "").strip()
+    if not body:
+        raise ValueError("Empty comment")
+
+    # enforce same public rules as feed
+    book = (
+        db.query(Book)
+        .join(User, Book.owner_id == User.id)
+        .filter(
+            Book.id == book_id,
+            Book.visibility == "PUBLIC",
+            User.profile_visibility == "PUBLIC",
+        )
+        .first()
+    )
+    if not book:
+        raise ValueError("Post not found")
+
+    c = Comment(review_id=book_id, user_id=user_id, body=body)
+    db.add(c)
+
+    book.comment_count = (book.comment_count or 0) + 1
+
+    db.commit()
+    db.refresh(c)
+
+    u = db.query(User).filter(User.id == user_id).first()
+
+    return {
+        "id": c.id,
+        "book_id": c.review_id,
+        "user": {"id": u.id if u else user_id, "username": u.username if u else None},
+        "body": c.body,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+    }
+

@@ -14,6 +14,16 @@ from ..services.feed import (
     has_liked,
 )
 
+from ..services.feed import (
+    get_public_feed,
+    get_public_feed_item,
+    set_like,
+    unset_like,
+    has_liked,
+    list_comments,   # NEW
+    add_comment,     # NEW
+)
+
 router = APIRouter(prefix="/feed", tags=["feed"])
 
 
@@ -87,3 +97,31 @@ def liked_status(
         "book_id": book_id,
         "liked": has_liked(db, user_id=user.id, book_id=book_id),
     }
+
+# -------------------------
+# Comments
+# -------------------------
+
+@router.get("/{book_id}/comments")
+def get_comments(book_id: int, db: Session = Depends(get_db)):
+    return {"book_id": book_id, "items": list_comments(db, book_id=book_id)}
+
+
+@router.post("/{book_id}/comments")
+def post_comment(
+    book_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    body = (payload or {}).get("body")
+    try:
+        c = add_comment(db, user_id=user.id, book_id=book_id, body=body)
+        return {"book_id": book_id, "comment": c}
+    except ValueError as e:
+        msg = str(e)
+        if msg == "Post not found":
+            raise HTTPException(status_code=404, detail="Post not found")
+        if msg == "Empty comment":
+            raise HTTPException(status_code=400, detail="Comment cannot be empty")
+        raise HTTPException(status_code=400, detail="Bad request")
