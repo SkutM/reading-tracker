@@ -48,9 +48,47 @@
   $: accessToken = $authStore.token;
   $: isAuthenticated = $authStore.isAuthenticated;
 
-  // per-item like UI state
+  // per-item like UI state (for the button)
   let liked: Record<number, boolean> = {};
   let liking: Record<number, boolean> = {};
+
+  // Option A: "liked by me" state per item (loaded after feed loads)
+  let likedByMe: Record<number, boolean> = {};
+
+  async function loadLikedForVisibleItems(list: FeedItem[]) {
+    // if not logged in, clear any stale liked state
+    if (!accessToken) {
+      likedByMe = {};
+      liked = {}; // keep button state consistent too
+      return;
+    }
+
+    try {
+      const entries = await Promise.all(
+        list.map(async (it) => {
+          // IMPORTANT: backend route is /feed/{id}/like (GET) returning { liked: boolean }
+          const res = await fetch(`${API_BASE}/feed/${it.id}/like`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+
+          if (!res.ok) return [it.id, false] as const;
+
+          const data = (await res.json()) as { liked: boolean };
+          return [it.id, !!data.liked] as const;
+        })
+      );
+
+      const map = Object.fromEntries(entries) as Record<number, boolean>;
+      likedByMe = map;
+
+      // also sync the button's liked state so it renders correctly
+      liked = map;
+    } catch {
+      // fail soft — don’t break the feed if these calls fail
+      likedByMe = {};
+      liked = {};
+    }
+  }
 
   function buildFeedURL(after: string | null = null) {
     const url = new URL(`${API_BASE}/feed`);
@@ -78,6 +116,9 @@
 
       items = after ? [...items, ...(data.items ?? [])] : (data.items ?? []);
       nextCursor = data.next_cursor ?? null;
+
+      // Option A: fetch liked state after items load (only if logged in)
+      await loadLikedForVisibleItems(items);
     } catch (e: any) {
       error = e?.message ?? 'Failed to load feed';
     } finally {
@@ -89,6 +130,8 @@
     // reset pagination + reload
     items = [];
     nextCursor = null;
+    likedByMe = {};
+    liked = {};
     loadFeed(null);
   }
 
@@ -128,7 +171,9 @@
 
       const data = await res.json(); // { liked: boolean, like_count: number }
 
+      // update both maps so heart + button stay consistent
       liked = { ...liked, [bookId]: !!data.liked };
+      likedByMe = { ...likedByMe, [bookId]: !!data.liked };
 
       // update the visible count in the feed list
       items = items.map((it) =>
@@ -218,7 +263,7 @@
                   </div>
 
                   <div class="right">
-                    <div>❤️ {it.like_count}</div>
+                    <div>{likedByMe[it.id] ? '❤️' : '🤍'} {it.like_count}</div>
                     <div>💬 {it.comment_count}</div>
 
                     <button
