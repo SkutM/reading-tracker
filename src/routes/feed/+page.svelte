@@ -67,7 +67,7 @@
       const entries = await Promise.all(
         list.map(async (it) => {
           // IMPORTANT: backend route is /feed/{id}/like (GET) returning { liked: boolean }
-          const res = await fetch(`${API_BASE}/feed/${it.id}/like`, {
+          const res = await fetch(`${API_BASE}/feed/${it.id}/liked`, {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
 
