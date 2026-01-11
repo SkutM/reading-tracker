@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..jwt_utils import get_current_user
 from ..auth_models import User
+
 from ..services.feed import (
     get_public_feed,
     get_public_feed_item,
@@ -14,14 +15,10 @@ from ..services.feed import (
     has_liked,
 )
 
-from ..services.feed import (
-    get_public_feed,
-    get_public_feed_item,
-    set_like,
-    unset_like,
-    has_liked,
-    list_comments,   # NEW
-    add_comment,     # NEW
+from ..services.comments import (
+    list_comments,
+    add_comment,
+    delete_comment,
 )
 
 router = APIRouter(prefix="/feed", tags=["feed"])
@@ -112,16 +109,41 @@ def post_comment(
     book_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     body = (payload or {}).get("body")
+
     try:
         c = add_comment(db, user_id=user.id, book_id=book_id, body=body)
         return {"book_id": book_id, "comment": c}
+
     except ValueError as e:
         msg = str(e)
-        if msg == "Post not found":
+
+        if msg == "book_not_commentable":
+            # book doesn't exist OR not public OR owner profile not public
             raise HTTPException(status_code=404, detail="Post not found")
-        if msg == "Empty comment":
+
+        if msg == "empty_body":
             raise HTTPException(status_code=400, detail="Comment cannot be empty")
+
+        if msg == "too_long":
+            raise HTTPException(status_code=400, detail="Comment is too long")
+
         raise HTTPException(status_code=400, detail="Bad request")
+
+
+@router.delete("/comments/{comment_id}")
+def delete_comment_route(
+    comment_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    try:
+        ok = delete_comment(db, comment_id=comment_id, user_id=user.id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Comment not found")
+        return {"ok": True}
+
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not allowed")

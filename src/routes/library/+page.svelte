@@ -105,8 +105,15 @@
 {:else}
 
   <div class="main-container">
-    <h1>Reading Tracker</h1>
-    <p>Track and review your favorite books!</p>
+    <div class="topbar">
+      <div>
+        <h1>My Library</h1>
+        <p class="subtitle">Track and review your favorite books!</p>
+      </div>
+
+      <a class="backlink" href="/feed">← Back to Feed</a>
+    </div>
+
 
     <div class="auth-bar">
       {#if isAuthenticated && currentUser}
@@ -220,6 +227,30 @@
 
 <style>
   :global(body) { background-color: #0d1117; }
+
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .subtitle {
+    margin: 6px 0 0;
+    color: #8b949e;
+  }
+
+  .backlink {
+    color: #a5b816;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .backlink:hover {
+    text-decoration: underline;
+  }
+
 
   .main-container {
     max-width: 900px;

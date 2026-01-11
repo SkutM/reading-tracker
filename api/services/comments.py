@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timezone
+
 from sqlalchemy.orm import Session
 
 from ..models import Book, Comment
@@ -9,6 +11,16 @@ from ..auth_models import User
 # --------------------------------------------------
 # Comments (service helpers)
 # --------------------------------------------------
+
+def iso_utc(dt):
+    if not dt:
+        return None
+    # If DB gave us a naive datetime, assume it's UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    # Always return UTC with Z suffix
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 def list_comments(db: Session, book_id: int) -> list[dict]:
     """
@@ -45,7 +57,7 @@ def list_comments(db: Session, book_id: int) -> list[dict]:
                 "review_id": c.review_id,
                 "user": {"id": u.id, "username": u.username},
                 "body": c.body,
-                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "created_at": iso_utc(c.created_at),
             }
         )
     return out
@@ -93,7 +105,7 @@ def add_comment(db: Session, book_id: int, user_id: int, body: str) -> dict:
         "review_id": c.review_id,
         "user": {"id": u.id, "username": u.username if u else None},
         "body": c.body,
-        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "created_at": iso_utc(c.created_at),
     }
 
 

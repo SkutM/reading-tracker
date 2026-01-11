@@ -35,6 +35,7 @@
 
   // auth-derived
   $: accessToken = $authStore.token;
+  $: currentUser = $authStore.user;
 
   // like state
   let liked = false;
@@ -47,6 +48,42 @@
 
   let newComment = '';
   let commentBusy = false;
+
+  // deletion UI state
+  let deletingCommentId: number | null = null;
+  let deleteError: string | null = null;
+
+  // --------------------------------------------------
+  // "Read more" state (character-limit preview + ellipsis)
+  // --------------------------------------------------
+  const PREVIEW_CHARS = 280; // <-- tweak this
+  let expandedComments = new Set<number>();
+
+  function isExpanded(id: number) {
+    return expandedComments.has(id);
+  }
+
+  function toggleExpand(id: number) {
+    if (expandedComments.has(id)) expandedComments.delete(id);
+    else expandedComments.add(id);
+
+    // force Svelte reactivity for Set
+    expandedComments = new Set(expandedComments);
+  }
+
+  function previewText(text: string, limit = PREVIEW_CHARS) {
+    const t = (text ?? '').trim();
+    if (!t) return { text: '', truncated: false };
+    if (t.length <= limit) return { text: t, truncated: false };
+
+    // try to avoid cutting mid-word by backing up to last whitespace
+    const slice = t.slice(0, limit);
+    const lastSpace = slice.search(/\s(?!.*\s)/); // last whitespace index
+    const cutIndex = lastSpace > 40 ? lastSpace : limit; // fallback for no-whitespace strings
+
+    const out = t.slice(0, cutIndex).trimEnd();
+    return { text: out + '…', truncated: true };
+  }
 
   function formatDate(s?: string | null) {
     if (!s) return '';
@@ -87,9 +124,13 @@
       if (!res.ok) throw new Error(`Comments request failed (${res.status})`);
       const data = await res.json();
       comments = (data.items ?? []) as CommentItem[];
+
+      // reset expansion state per-post
+      expandedComments = new Set();
     } catch (e: any) {
       commentsError = e?.message ?? 'Failed to load comments';
       comments = [];
+      expandedComments = new Set();
     } finally {
       commentsLoading = false;
     }
@@ -103,6 +144,9 @@
     // reset comments per-post while loading
     comments = [];
     commentsError = null;
+    deleteError = null;
+    deletingCommentId = null;
+    expandedComments = new Set();
 
     try {
       const res = await fetch(`${API_BASE}/feed/${id}`);
@@ -118,6 +162,7 @@
       error = e?.message ?? 'Failed to load post';
       item = null;
       comments = [];
+      expandedComments = new Set();
     } finally {
       loading = false;
     }
@@ -193,6 +238,55 @@
     }
   }
 
+  async function deleteOneComment(commentId: number) {
+    if (!item) return;
+
+    if (!accessToken) {
+      alert('Please log in.');
+      return;
+    }
+    if (deletingCommentId) return;
+
+    deletingCommentId = commentId;
+    deleteError = null;
+
+    try {
+      const res = await fetch(`${API_BASE}/feed/comments/${commentId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (res.status === 403) {
+        throw new Error('You can only delete your own comments.');
+      }
+      if (!res.ok) {
+        throw new Error(`Failed to delete comment (${res.status})`);
+      }
+
+      // optimistic local update
+      comments = comments.filter((c) => c.id !== commentId);
+
+      // also clean up expanded state
+      if (expandedComments.has(commentId)) {
+        expandedComments.delete(commentId);
+        expandedComments = new Set(expandedComments);
+      }
+
+      // keep the visible count in sync
+      item.comment_count = Math.max(0, (item.comment_count ?? 0) - 1);
+    } catch (e: any) {
+      deleteError = e?.message ?? 'Failed to delete comment';
+    } finally {
+      deletingCommentId = null;
+    }
+  }
+
+  function canDelete(c: CommentItem) {
+    return !!currentUser && c.user?.id === currentUser.id;
+  }
+
   // reload when route id changes (and after boot)
   $: if (bootReady) {
     const id = $page.params.id;
@@ -253,6 +347,10 @@
         <div class="comments">
           <h2>Comments</h2>
 
+          {#if deleteError}
+            <p class="error">{deleteError}</p>
+          {/if}
+
           {#if commentsLoading}
             <p class="muted">Loading comments…</p>
           {:else if commentsError}
@@ -262,14 +360,42 @@
           {:else}
             <ul class="commentlist">
               {#each comments as c (c.id)}
+                {@const p = previewText(c.body)}
+
                 <li class="comment">
                   <div class="commentmeta">
                     <span class="commentuser">@{c.user.username ?? 'reader'}</span>
                     {#if c.created_at}
                       <span class="commentdate">• {formatDateTime(c.created_at)}</span>
                     {/if}
+
+                    {#if canDelete(c)}
+                      <button
+                        class="delbtn"
+                        disabled={deletingCommentId === c.id}
+                        on:click={() => deleteOneComment(c.id)}
+                        aria-label="Delete comment"
+                        title="Delete"
+                        type="button"
+                      >
+                        {#if deletingCommentId === c.id} Deleting… {:else} Delete {/if}
+                      </button>
+                    {/if}
                   </div>
-                  <div class="commentbody">{c.body}</div>
+
+                  <div class="commentbody">
+                    {#if isExpanded(c.id)}
+                      {c.body}
+                    {:else}
+                      {p.text}
+                    {/if}
+                  </div>
+
+                  {#if p.truncated || isExpanded(c.id)}
+                    <button class="readmore" type="button" on:click={() => toggleExpand(c.id)}>
+                      {#if isExpanded(c.id)} Read less {:else} Read more… {/if}
+                    </button>
+                  {/if}
                 </li>
               {/each}
             </ul>
@@ -282,11 +408,12 @@
                 placeholder="Write a comment…"
                 bind:value={newComment}
                 disabled={commentBusy}
-              />
+              ></textarea>
               <button
                 class="btn"
                 on:click={submitComment}
                 disabled={commentBusy || newComment.trim().length === 0}
+                type="button"
               >
                 {#if commentBusy} Posting… {:else} Post comment {/if}
               </button>
@@ -359,12 +486,51 @@
   .comments h2 { margin: 0 0 10px; font-size: 1.05rem; }
 
   .commentlist { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-  .comment { background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 10px; }
-  .commentmeta { font-size: 0.85rem; color: #8b949e; display: flex; gap: 8px; }
+  .comment {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 10px;
+    overflow: hidden; /* safety: prevents horizontal bleed */
+  }
+  .commentmeta { font-size: 0.85rem; color: #8b949e; display: flex; gap: 8px; align-items: center; }
   .commentuser { color: #c9d1d9; font-weight: 700; }
-  .commentbody { margin-top: 6px; color: #e6edf3; white-space: pre-wrap; }
 
-  .composer { margin-top: 12px; display: grid; gap: 8px; }
+  /* Wrap correctly (no scroll, no overflow) */
+  .commentbody {
+    margin-top: 6px;
+    color: #e6edf3;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere; /* breaks long URLs/tokens */
+    word-break: normal;
+    max-width: 100%;
+  }
+
+  .readmore {
+    margin-top: 4px;
+    background: none;
+    border: none;
+    color: #58a6ff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0;
+  }
+  .readmore:hover { text-decoration: underline; }
+
+  .delbtn {
+    margin-left: auto;
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid #30363d;
+    background: transparent;
+    color: #f89582;
+    cursor: pointer;
+  }
+  .delbtn:hover { filter: brightness(1.1); }
+  .delbtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .composer { margin-top: 12px; display: grid; gap: 8px; min-width: 0; }
   textarea {
     width: 100%;
     padding: 10px;
@@ -373,6 +539,8 @@
     background: #0d1117;
     color: #e6edf3;
     resize: vertical;
+    box-sizing: border-box;
+    min-width: 0;
   }
   .btn {
     justify-self: end;

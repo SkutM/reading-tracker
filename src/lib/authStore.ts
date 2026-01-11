@@ -99,3 +99,27 @@ export function logout() {
     localStorage.removeItem("email");
   }
 }
+
+export async function hydrateUser(API_BASE: string) {
+  const token = readToken();
+  if (!token) return;
+
+  // If user missing or id is falsy (0/null), fetch the real user
+  let existing: UserResponse | null = readUser();
+  const existingId = (existing as any)?.id;
+
+  if (!existing || !existingId) {
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+
+      const me = (await res.json()) as UserResponse;
+      login(token, me);
+    } catch {
+      // ignore
+    }
+  }
+}
+

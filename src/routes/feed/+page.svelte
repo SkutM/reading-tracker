@@ -194,7 +194,7 @@
   <main class="wrap">
     <div class="topbar">
       <h1>Public Feed</h1>
-      <a class="backlink" href="/">← Home</a>
+      <a class="backlink" href="/library">My Library</a>
     </div>
 
     <div class="controls">
