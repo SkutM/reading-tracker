@@ -61,7 +61,7 @@ cd ..
 
 ### 3. Database Migration
 
-The database structure must be created from your models.
+The database structure must be created from models.
 
 ```sh
 # Navigate back to the API folder to run Alembic
