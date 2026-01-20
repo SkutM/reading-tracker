@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 from typing import Optional, Tuple, List, Dict, Any
 
 from sqlalchemy import and_, desc, asc, func
@@ -13,18 +13,41 @@ from api.auth_models import User
 
 
 # --------------------------------------------------
-# Cursor helpers
+# Cursor helpers (datetime|id)
 # --------------------------------------------------
 
-def _parse_cursor(cursor: Optional[str]) -> Optional[Tuple[date, int]]:
+def _parse_cursor(cursor: Optional[str]) -> Optional[Tuple[datetime, int]]:
+    """
+    Cursor format: "<ISO_DATETIME>|<id>"
+    Example: "2026-01-06T05:11:57.400119|31"
+    """
     if not cursor:
         return None
-    d, id_str = cursor.split("|", 1)
-    return (date.fromisoformat(d), int(id_str))
+    ts, id_str = cursor.split("|", 1)
+    return (datetime.fromisoformat(ts), int(id_str))
 
 
-def _encode_cursor(d: date, rid: int) -> str:
-    return f"{d.isoformat()}|{rid}"
+def _encode_cursor(dt: datetime, rid: int) -> str:
+    return f"{dt.isoformat()}|{rid}"
+
+
+# --------------------------------------------------
+# Review type mapping (Option B)
+# --------------------------------------------------
+
+def _review_type_label(b: Book) -> Optional[str]:
+    """
+    Map Book.is_recommended -> API review_type label.
+    True  -> "RECOMMENDED"
+    False -> "NOT_RECOMMENDED"
+    None/missing -> None (keep blank)
+    """
+    val = getattr(b, "is_recommended", None)
+    if val is True:
+        return "RECOMMENDED"
+    if val is False:
+        return "NOT_RECOMMENDED"
+    return None
 
 
 # --------------------------------------------------
@@ -53,42 +76,58 @@ def get_public_feed(
     if genre and hasattr(Book, "genre"):
         q = q.filter(getattr(Book, "genre") == genre)
 
+    # Option B: review_type filter maps to Book.is_recommended
     if review_type:
-        q = q.filter(Book.review_type == review_type)
+        is_rec = getattr(Book, "is_recommended", None)
+        if review_type == "RECOMMENDED":
+            q = q.filter(is_rec == True)  # noqa: E712
+        elif review_type == "NOT_RECOMMENDED":
+            q = q.filter(is_rec == False)  # noqa: E712
+        else:
+            # Treat anything else (e.g. "NEUTRAL") as "no value set"
+            q = q.filter(is_rec == None)  # noqa: E711
 
+    # NOTE: Cursor paging is only supported for newest/oldest (created_at-based)
     if sort == "oldest":
-        order_cols = (asc(Book.review_date), asc(Book.id))
+        order_cols = (asc(Book.created_at), asc(Book.id))
         if cursor:
             q = q.filter(
-                (Book.review_date > cursor[0])
-                | and_(Book.review_date == cursor[0], Book.id > cursor[1])
+                (Book.created_at > cursor[0])
+                | and_(Book.created_at == cursor[0], Book.id > cursor[1])
             )
 
     elif sort == "review_length":
+        # no cursor paging here
         order_cols = (desc(func.length(Book.review_text)), desc(Book.id))
+        cursor = None
 
     elif sort == "review_type":
-        order_cols = (asc(Book.review_type), desc(Book.review_date), desc(Book.id))
+        # no cursor paging here
+        # Option B: sort by is_recommended, then most recent review_date
+        is_rec = getattr(Book, "is_recommended", None)
+        order_cols = (asc(is_rec), desc(Book.review_date), desc(Book.id))
+        cursor = None
 
     else:
-        # newest
-        order_cols = (desc(Book.review_date), desc(Book.id))
+        # newest (default) — created_at DESC
+        order_cols = (desc(Book.created_at), desc(Book.id))
         if cursor:
             q = q.filter(
-                (Book.review_date < cursor[0])
-                | and_(Book.review_date == cursor[0], Book.id < cursor[1])
+                (Book.created_at < cursor[0])
+                | and_(Book.created_at == cursor[0], Book.id < cursor[1])
             )
 
     q = q.order_by(*order_cols).limit(min(limit, 50))
     items: List[Book] = q.all()
 
     next_cursor = None
-    if items:
+    # Only provide next_cursor for newest/oldest since those are cursor-paged
+    if items and sort in ("newest", "oldest"):
         last = items[-1]
-        if last.review_date:
-            next_cursor = _encode_cursor(last.review_date, last.id)
+        if last.created_at:
+            next_cursor = _encode_cursor(last.created_at, last.id)
 
-    out = []
+    out: List[Dict[str, Any]] = []
     for b in items:
         out.append(
             {
@@ -109,8 +148,10 @@ def get_public_feed(
                     if b.review_text and len(b.review_text) > 280
                     else b.review_text
                 ),
-                "review_type": b.review_type,
+                # Option B: derived label from is_recommended
+                "review_type": _review_type_label(b),
                 "review_date": b.review_date.isoformat() if b.review_date else None,
+                "created_at": b.created_at.isoformat() if b.created_at else None,
                 "visibility": b.visibility,
                 "like_count": b.like_count or 0,
                 "comment_count": b.comment_count or 0,
@@ -155,7 +196,8 @@ def get_public_feed_item(db: Session, book_id: int) -> Optional[Dict[str, Any]]:
             "username": owner.username if owner else None,
         },
         "body": book.review_text,
-        "review_type": book.review_type,
+        # Option B: derived label from is_recommended
+        "review_type": _review_type_label(book),
         "review_date": book.review_date.isoformat() if book.review_date else None,
         "visibility": book.visibility,
         "like_count": book.like_count or 0,
@@ -244,6 +286,7 @@ def unset_like(db: Session, user_id: int, book_id: int) -> int:
     db.refresh(book)
     return book.like_count or 0
 
+
 # --------------------------------------------------
 # Comments (service helpers)
 # --------------------------------------------------
@@ -253,7 +296,6 @@ def list_comments(db: Session, book_id: int) -> list[dict]:
     Public: list comments for a book (oldest -> newest).
     Returns [] if book doesn't exist or isn't public.
     """
-    # enforce same public rules as feed
     book = (
         db.query(Book)
         .join(User, Book.owner_id == User.id)
@@ -298,7 +340,6 @@ def add_comment(db: Session, user_id: int, book_id: int, body: str) -> dict:
     if not body:
         raise ValueError("Empty comment")
 
-    # enforce same public rules as feed
     book = (
         db.query(Book)
         .join(User, Book.owner_id == User.id)
@@ -329,4 +370,3 @@ def add_comment(db: Session, user_id: int, book_id: int, body: str) -> dict:
         "body": c.body,
         "created_at": c.created_at.isoformat() if c.created_at else None,
     }
-

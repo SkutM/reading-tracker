@@ -22,6 +22,7 @@
     body_preview: string | null;
     review_type: ReviewType | null;
     review_date: string | null;
+    created_at: string | null;
     visibility: string;
     like_count: number;
     comment_count: number;
@@ -255,10 +256,18 @@
                       {it.book.title}{#if it.book.author} — {it.book.author}{/if}
                     </div>
 
+
                     <div class="meta">
                       @{it.author.username ?? 'reader'}
-                      {#if it.review_date} • {formatDate(it.review_date)}{/if}
-                      {#if it.review_type} • {it.review_type}{/if}
+                      {#if it.review_date}
+                        • {formatDate(it.review_date)}
+                      {:else if it.created_at}
+                        • {formatDate(it.created_at)}
+                      {/if}
+
+                      {#if it.review_type}
+                        • {it.review_type}
+                      {/if}
                     </div>
                   </div>
 
