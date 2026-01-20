@@ -6,9 +6,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
-
     TURSO_DATABASE_URL: str | None = None
     TURSO_AUTH_TOKEN: str | None = None
+
+    model_config = SettingsConfigDict(
+        env_file=".env.backend",
+        env_file_encoding="utf-8",
+        extra="forbid",   # keep strict if you want
+    )
 
 settings = Settings()

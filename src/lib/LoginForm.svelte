@@ -1,8 +1,7 @@
 <script lang="ts">
   import { login } from '$lib/authStore';
   import type { UserResponse } from '$lib/types';
-  import { api, loginUser } from '$lib/api';
-  import { getProfile } from '$lib/api'
+  import { loginUser, getProfile } from '$lib/api';
 
   let username = '';
   let password = '';
@@ -11,34 +10,38 @@
   let submitting = false;
 
   async function handleLogin() {
-  isError = false;
-  message = 'Logging in...';
-  submitting = true;
-
-  const e = username.trim();
-  const p = password.trim();
-  if (!e || !p) {
-    message = '❌ Username and password are required.';
-    isError = true;
-    submitting = false;
-    return;
-  }
-
-  try {
-    const { access_token } = await loginUser({ username: e, password: p });
-    const userData: UserResponse = { id: 0, username: e };
-    login(access_token, userData);
-
-    message = `Welcome, ${userData.username}!`;
     isError = false;
-  } catch (err: any) {
-    message = `❌ Login error: ${err?.message ?? 'Request failed'}`;
-    isError = true;
-  } finally {
-    submitting = false;
-  }
-}
+    message = 'Logging in...';
+    submitting = true;
 
+    const e = username.trim();
+    const p = password.trim();
+    if (!e || !p) {
+      message = '❌ Username and password are required.';
+      isError = true;
+      submitting = false;
+      return;
+    }
+
+    try {
+      // 1) Get token
+      const { access_token } = await loginUser({ username: e, password: p });
+
+      // 2) Fetch real user profile (must include real id)
+      const me = (await getProfile(access_token)) as UserResponse;
+
+      // 3) Persist auth state (token + real user)
+      login(access_token, me);
+
+      message = `Welcome, ${me.username ?? e}!`;
+      isError = false;
+    } catch (err: any) {
+      message = `❌ Login error: ${err?.message ?? 'Request failed'}`;
+      isError = true;
+    } finally {
+      submitting = false;
+    }
+  }
 </script>
 
 <div class="login-card">

@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.database import engine, SessionLocal, get_db, Base
 from api import models, auth_models, schemas, auth_routes, jwt_utils
 from api.auth_models import User
+from api.routers import health, feed
+from .routers import comments
 import api.database as db_mod  # only for the debug prints below
 
 print("DB MODULE FILE:", db_mod.__file__)
@@ -50,10 +52,6 @@ def fetch_book_cover(title: str, author: str) -> str | None:
 # fast api init
 app = FastAPI()
 
-@app.on_event("startup")
-def _create_tables():
-    Base.metadata.create_all(bind=engine)
-
 # auth cors middleware
 # OPTIONS pre-flight checks, even with Vite proxy
 origins = [
@@ -70,8 +68,18 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+@app.on_event("startup")
+def _create_tables():
+    Base.metadata.create_all(bind=engine)
+
+
 # auth router
 app.include_router(auth_routes.auth_router)
+
+# social readia / infra routers
+app.include_router(health.router)
+app.include_router(feed.router)
+app.include_router(comments.router)
 
 # db health check
 @app.get("/ping-db")
