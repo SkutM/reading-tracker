@@ -34,28 +34,32 @@ def run():
             owner = random.choice(users)
             rd = date.today() - timedelta(days=random.randint(0, 120))
 
+            created_dt = datetime.combine(rd, datetime.min.time()) + timedelta(
+                hours=random.randint(0, 23),
+                minutes=random.randint(0, 59),
+                seconds=random.randint(0, 59),
+            )
+
             b = Book(
                 title=f"Book {i}",
                 author=f"Author {i}",
                 cover_image_url=None,
                 review_text=f"Review {i}: some thoughts about Book {i}.",
                 is_recommended=random.choice([True, False]),
-                read_on=datetime.utcnow(),
-                created_at=datetime.utcnow(),
+                read_on=created_dt,
+                created_at=created_dt,
                 owner_id=owner.id,
             )
 
-            # set Social Readia fields if present on the model
             if hasattr(b, "visibility"):
-                b.visibility = "PUBLIC"  # you can randomize later if you want
-
-            if hasattr(b, "review_type"):
-                b.review_type = random.choice(
-                    ["RECOMMENDED", "NOT_RECOMMENDED", "NEUTRAL"]
-                )
+                b.visibility = "PUBLIC"
 
             if hasattr(b, "review_date"):
                 b.review_date = rd
+
+            # (Optional) remove this if you’re now mapping review_type from is_recommended
+            if hasattr(b, "review_type"):
+                b.review_type = random.choice(["RECOMMENDED", "NOT_RECOMMENDED", "NEUTRAL"])
 
             if hasattr(b, "like_count"):
                 b.like_count = random.randint(0, 20)
