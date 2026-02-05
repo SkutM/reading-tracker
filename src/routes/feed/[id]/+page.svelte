@@ -384,7 +384,7 @@
                   </div>
 
                   <div class="commentbody">
-                    {#if isExpanded(c.id)}
+                    {#if expandedComments[c.id]}
                       {c.body}
                     {:else}
                       {p.text}{#if p.truncated}<span class="dots">...</span>{/if}
@@ -397,7 +397,7 @@
                       type="button"
                       on:click|stopPropagation|preventDefault={() => toggleExpand(c.id)}
                     >
-                      {#if isExpanded(c.id)} Read less {:else} Read more... {/if}
+                      {#if expandedComments[c.id]} Read less {:else} Read more… {/if}
                     </button>
                   {/if}
                 </li>
