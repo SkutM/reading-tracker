@@ -54,21 +54,20 @@
   let deleteError: string | null = null;
 
   // --------------------------------------------------
-  // "Read more" state (character-limit preview + ellipsis)
+  // "Read more" state (GFG-style, but Svelte-idiomatic)
   // --------------------------------------------------
   const PREVIEW_CHARS = 280; // <-- tweak this
-  let expandedComments = new Set<number>();
+  let expandedComments: Record<number, boolean> = {};
 
   function isExpanded(id: number) {
-    return expandedComments.has(id);
+    return !!expandedComments[id];
   }
 
   function toggleExpand(id: number) {
-    if (expandedComments.has(id)) expandedComments.delete(id);
-    else expandedComments.add(id);
-
-    // force Svelte reactivity for Set
-    expandedComments = new Set(expandedComments);
+    expandedComments = {
+      ...expandedComments,
+      [id]: !expandedComments[id]
+    };
   }
 
   function previewText(text: string, limit = PREVIEW_CHARS) {
@@ -82,7 +81,7 @@
     const cutIndex = lastSpace > 40 ? lastSpace : limit; // fallback for no-whitespace strings
 
     const out = t.slice(0, cutIndex).trimEnd();
-    return { text: out + '…', truncated: true };
+    return { text: out, truncated: true };
   }
 
   function formatDate(s?: string | null) {
@@ -126,11 +125,11 @@
       comments = (data.items ?? []) as CommentItem[];
 
       // reset expansion state per-post
-      expandedComments = new Set();
+      expandedComments = {};
     } catch (e: any) {
       commentsError = e?.message ?? 'Failed to load comments';
       comments = [];
-      expandedComments = new Set();
+      expandedComments = {};
     } finally {
       commentsLoading = false;
     }
@@ -146,7 +145,7 @@
     commentsError = null;
     deleteError = null;
     deletingCommentId = null;
-    expandedComments = new Set();
+    expandedComments = {};
 
     try {
       const res = await fetch(`${API_BASE}/feed/${id}`);
@@ -162,7 +161,7 @@
       error = e?.message ?? 'Failed to load post';
       item = null;
       comments = [];
-      expandedComments = new Set();
+      expandedComments = {};
     } finally {
       loading = false;
     }
@@ -269,9 +268,9 @@
       comments = comments.filter((c) => c.id !== commentId);
 
       // also clean up expanded state
-      if (expandedComments.has(commentId)) {
-        expandedComments.delete(commentId);
-        expandedComments = new Set(expandedComments);
+      if (expandedComments[commentId]) {
+        const { [commentId]: _, ...rest } = expandedComments;
+        expandedComments = rest;
       }
 
       // keep the visible count in sync
@@ -359,6 +358,7 @@
             <p class="muted">No comments yet.</p>
           {:else}
             <ul class="commentlist">
+              
               {#each comments as c (c.id)}
                 {@const p = previewText(c.body)}
 
@@ -384,16 +384,20 @@
                   </div>
 
                   <div class="commentbody">
-                    {#if isExpanded(c.id)}
+                    {#if expandedComments[c.id]}
                       {c.body}
                     {:else}
-                      {p.text}
+                      {p.text}{#if p.truncated}<span class="dots">...</span>{/if}
                     {/if}
                   </div>
 
                   {#if p.truncated || isExpanded(c.id)}
-                    <button class="readmore" type="button" on:click={() => toggleExpand(c.id)}>
-                      {#if isExpanded(c.id)} Read less {:else} Read more… {/if}
+                    <button
+                      class="readmore"
+                      type="button"
+                      on:click|stopPropagation|preventDefault={() => toggleExpand(c.id)}
+                    >
+                      {#if expandedComments[c.id]} Read less {:else} Read more… {/if}
                     </button>
                   {/if}
                 </li>
@@ -504,6 +508,10 @@
     overflow-wrap: anywhere; /* breaks long URLs/tokens */
     word-break: normal;
     max-width: 100%;
+  }
+
+  .dots {
+    display: inline;
   }
 
   .readmore {

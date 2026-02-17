@@ -33,7 +33,6 @@
   // ---- Controls state (UI) ----
   let sort: SortMode = 'newest';
   let reviewType: ReviewType | 'ALL' = 'ALL';
-  let genre = ''; // free-text (optional)
   let limit = 20;
 
   // ---- Data state ----
@@ -57,17 +56,15 @@
   let likedByMe: Record<number, boolean> = {};
 
   async function loadLikedForVisibleItems(list: FeedItem[]) {
-    // if not logged in, clear any stale liked state
     if (!accessToken) {
       likedByMe = {};
-      liked = {}; // keep button state consistent too
+      liked = {};
       return;
     }
 
     try {
       const entries = await Promise.all(
         list.map(async (it) => {
-          // IMPORTANT: backend route is /feed/{id}/like (GET) returning { liked: boolean }
           const res = await fetch(`${API_BASE}/feed/${it.id}/liked`, {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
@@ -81,11 +78,8 @@
 
       const map = Object.fromEntries(entries) as Record<number, boolean>;
       likedByMe = map;
-
-      // also sync the button's liked state so it renders correctly
       liked = map;
     } catch {
-      // fail soft — don’t break the feed if these calls fail
       likedByMe = {};
       liked = {};
     }
@@ -96,9 +90,7 @@
     url.searchParams.set('sort', sort);
     url.searchParams.set('limit', String(limit));
 
-    if (genre.trim().length > 0) url.searchParams.set('genre', genre.trim());
     if (reviewType !== 'ALL') url.searchParams.set('review_type', reviewType);
-
     if (after) url.searchParams.set('after', after);
 
     return url;
@@ -118,7 +110,6 @@
       items = after ? [...items, ...(data.items ?? [])] : (data.items ?? []);
       nextCursor = data.next_cursor ?? null;
 
-      // Option A: fetch liked state after items load (only if logged in)
       await loadLikedForVisibleItems(items);
     } catch (e: any) {
       error = e?.message ?? 'Failed to load feed';
@@ -128,7 +119,6 @@
   }
 
   function applyFilters() {
-    // reset pagination + reload
     items = [];
     nextCursor = null;
     likedByMe = {};
@@ -146,7 +136,6 @@
   }
 
   async function toggleLike(e: Event, bookId: number) {
-    // IMPORTANT: your whole card is wrapped in <a>, prevent navigation
     e.preventDefault();
     e.stopPropagation();
 
@@ -163,20 +152,16 @@
     try {
       const res = await fetch(`${API_BASE}/feed/${bookId}/like`, {
         method,
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (!res.ok) throw new Error(`Like request failed (${res.status})`);
 
       const data = await res.json(); // { liked: boolean, like_count: number }
 
-      // update both maps so heart + button stay consistent
       liked = { ...liked, [bookId]: !!data.liked };
       likedByMe = { ...likedByMe, [bookId]: !!data.liked };
 
-      // update the visible count in the feed list
       items = items.map((it) =>
         it.id === bookId ? { ...it, like_count: data.like_count ?? it.like_count } : it
       );
@@ -198,6 +183,7 @@
       <a class="backlink" href="/library">My Library</a>
     </div>
 
+    <!-- Controls (3 options now) -->
     <div class="controls">
       <div class="control">
         <label for="sort">Sort</label>
@@ -217,11 +203,6 @@
           <option value="NEUTRAL">Neutral</option>
           <option value="NOT_RECOMMENDED">Not recommended</option>
         </select>
-      </div>
-
-      <div class="control">
-        <label for="genre">Genre (optional)</label>
-        <input id="genre" type="text" placeholder="e.g. Fantasy" bind:value={genre} />
       </div>
 
       <div class="control small">
@@ -255,7 +236,6 @@
                     <div class="title">
                       {it.book.title}{#if it.book.author} — {it.book.author}{/if}
                     </div>
-
 
                     <div class="meta">
                       @{it.author.username ?? 'reader'}
@@ -345,6 +325,7 @@
   .more:hover { background: #2ea043; }
   .more:disabled { opacity: 0.7; cursor: not-allowed; }
 
+  /* --------- NEW: controls layout tuned for 3 selects --------- */
   .controls {
     margin-top: 10px;
     margin-bottom: 10px;
@@ -352,13 +333,12 @@
     border: 1px solid #30363d;
     border-radius: 10px;
     background: #1c1f24;
+
     display: grid;
-    grid-template-columns: 1.2fr 1.2fr 2fr 0.8fr auto;
+    grid-template-columns: 1fr 1fr 120px auto; /* Sort | Review type | Limit | Apply */
     gap: 10px;
     align-items: end;
   }
-
-  .controls .control:nth-child(3) { max-width: 280px; }
 
   .control label {
     display: block;
@@ -387,6 +367,32 @@
     background-size: 14px;
   }
 
+  .control.small { max-width: 120px; }
+
+  .apply {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    background: #238636;
+    color: white;
+    font-weight: 600;
+    height: 42px;
+    white-space: nowrap;
+  }
+
+  .apply:hover { background: #2ea043; }
+  .apply:disabled { opacity: 0.7; cursor: not-allowed; }
+
+  /* Responsive: stack nicely */
+  @media (max-width: 860px) {
+    .controls {
+      grid-template-columns: 1fr 1fr;
+    }
+    .control.small { max-width: none; }
+    .apply { grid-column: span 2; width: 100%; }
+  }
+
   .cardlink {
     display: block;
     color: inherit;
@@ -400,22 +406,6 @@
     outline-offset: 4px;
     border-radius: 12px;
   }
-
-  .control.small { max-width: 120px; }
-
-  .apply {
-    padding: 10px 14px;
-    border-radius: 8px;
-    border: none;
-    cursor: pointer;
-    background: #238636;
-    color: white;
-    font-weight: 600;
-    height: 42px;
-  }
-
-  .apply:hover { background: #2ea043; }
-  .apply:disabled { opacity: 0.7; cursor: not-allowed; }
 
   /* --- Like button --- */
   .likebtn {
@@ -431,10 +421,4 @@
 
   .likebtn:hover { filter: brightness(1.05); }
   .likebtn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-  @media (max-width: 860px) {
-    .controls { grid-template-columns: 1fr 1fr; }
-    .control.small { max-width: none; }
-    .apply { grid-column: span 2; }
-  }
 </style>

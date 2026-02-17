@@ -103,10 +103,13 @@ def get_public_feed(
 
     elif sort == "review_type":
         # no cursor paging here
-        # Option B: sort by is_recommended, then most recent review_date
-        is_rec = getattr(Book, "is_recommended", None)
-        order_cols = (asc(is_rec), desc(Book.review_date), desc(Book.id))
         cursor = None
+
+        is_rec = getattr(Book, "is_recommended", None)
+
+        # Within each bucket: newest first by created_at (always present)
+        order_cols = (asc(is_rec), desc(Book.created_at), desc(Book.id))
+
 
     else:
         # newest (default) — created_at DESC
