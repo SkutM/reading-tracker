@@ -2,10 +2,11 @@
   import { page } from '$app/stores';
   import BootGate from '$lib/components/BootGate.svelte';
   import { auth as authStore } from '$lib/authStore';
+  import { PUBLIC_API_BASE_URL } from '$env/static/public';
 
   let bootReady = false;
 
-  const API_BASE = import.meta.env.PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+  const API_BASE = PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
   type ReviewType = 'RECOMMENDED' | 'NOT_RECOMMENDED' | 'NEUTRAL';
 
