@@ -190,8 +190,6 @@
         <select id="sort" bind:value={sort}>
           <option value="newest">Newest</option>
           <option value="oldest">Oldest</option>
-          <option value="review_length">Review length</option>
-          <option value="review_type">Review type</option>
         </select>
       </div>
 
@@ -200,7 +198,6 @@
         <select id="reviewType" bind:value={reviewType}>
           <option value="ALL">All</option>
           <option value="RECOMMENDED">Recommended</option>
-          <option value="NEUTRAL">Neutral</option>
           <option value="NOT_RECOMMENDED">Not recommended</option>
         </select>
       </div>
