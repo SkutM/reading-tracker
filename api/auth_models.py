@@ -18,9 +18,6 @@ class User(Base):
     username = Column(String(80), unique=True, nullable=False, index=True)
     password_hash = Column(String(128), nullable=False)
 
-    # NEW - social readia
-    profile_visibility = Column(String(16), nullable=False, default="PUBLIC")
-
     # link to Book table (one user has many books)
     books = relationship("Book", back_populates="owner")
 
