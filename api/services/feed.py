@@ -67,10 +67,6 @@ def get_public_feed(
     q = (
         db.query(Book)
         .join(User, Book.owner_id == User.id)
-        .filter(
-            Book.visibility == "PUBLIC",
-            User.profile_visibility == "PUBLIC",
-        )
     )
 
     if genre and hasattr(Book, "genre"):
