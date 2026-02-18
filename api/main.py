@@ -57,7 +57,9 @@ app = FastAPI()
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://reading-tracker-qahrn94mu-scotts-projects-69acb861.vercel.app",
+    "https://reading-tracker-omega.vercel.app",
+    "https://reading-tracker-git-main-scotts-projects-69acb861.vercel.app",
+    "https://reading-tracker-cezljv7u7-scotts-projects-69acb861.vercel.app",
 ]
 app.add_middleware(
     CORSMiddleware,
