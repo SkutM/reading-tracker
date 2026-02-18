@@ -21,8 +21,6 @@ class Book(Base):
     read_on = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # NEW (Social Readia)
-    visibility = Column(String(16), nullable=False, default="PUBLIC")
     review_type = Column(String(20), nullable=True)
     review_date = Column(Date, nullable=True)
     started_date = Column(Date, nullable=True)
