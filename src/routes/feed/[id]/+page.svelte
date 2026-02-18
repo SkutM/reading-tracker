@@ -103,7 +103,7 @@
     }
 
     try {
-      const res = await fetch(`${API_BASE}/feed/${id}/liked`, {
+      const res = await fetch(`${BASE}/feed/${id}/liked`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) return; // don’t hard-fail the page if this fails
@@ -119,7 +119,7 @@
     commentsError = null;
 
     try {
-      const res = await fetch(`${API_BASE}/feed/${id}/comments`);
+      const res = await fetch(`${BASE}/feed/${id}/comments`);
       if (!res.ok) throw new Error(`Comments request failed (${res.status})`);
       const data = await res.json();
       comments = (data.items ?? []) as CommentItem[];
@@ -148,7 +148,7 @@
     expandedComments = {};
 
     try {
-      const res = await fetch(`${API_BASE}/feed/${id}`);
+      const res = await fetch(`${BASE}/feed/${id}`);
       if (!res.ok) throw new Error(`Post request failed (${res.status})`);
       item = (await res.json()) as FeedDetail;
 
@@ -181,7 +181,7 @@
 
     try {
       const method = liked ? 'DELETE' : 'POST';
-      const res = await fetch(`${API_BASE}/feed/${id}/like`, {
+      const res = await fetch(`${BASE}/feed/${id}/like`, {
         method,
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -212,7 +212,7 @@
 
     commentBusy = true;
     try {
-      const res = await fetch(`${API_BASE}/feed/${item.id}/comments`, {
+      const res = await fetch(`${BASE}/feed/${item.id}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -250,7 +250,7 @@
     deleteError = null;
 
     try {
-      const res = await fetch(`${API_BASE}/feed/comments/${commentId}`, {
+      const res = await fetch(`${BASE}/feed/comments/${commentId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${accessToken}`,
