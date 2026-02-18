@@ -1,6 +1,12 @@
 import { PUBLIC_API_BASE_URL } from '$env/static/public';
 
-const BASE = PUBLIC_API_BASE_URL || 'http://localhost:8000';
+export const BASE =
+  PUBLIC_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8000' : '');
+
+if (!BASE) {
+  throw new Error('Missing PUBLIC_API_BASE_URL in production');
+}
+
 
 function authHeader(): Record<string, string> {
   if (typeof window === 'undefined') return {};

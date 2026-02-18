@@ -1,11 +1,9 @@
 <script lang="ts">
   import BootGate from '$lib/components/BootGate.svelte';
   import { auth as authStore } from '$lib/authStore';
-  import { PUBLIC_API_BASE_URL } from '$env/static/public';
+  import { BASE } from '$lib/api';
 
   let bootReady = false;
-
-  const API_BASE = PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
   type ReviewType = 'RECOMMENDED' | 'NOT_RECOMMENDED' | 'NEUTRAL';
   type SortMode = 'newest' | 'oldest' | 'review_length' | 'review_type';
@@ -24,7 +22,6 @@
     review_type: ReviewType | null;
     review_date: string | null;
     created_at: string | null;
-    visibility: string;
     like_count: number;
     comment_count: number;
   };
@@ -66,7 +63,7 @@
     try {
       const entries = await Promise.all(
         list.map(async (it) => {
-          const res = await fetch(`${API_BASE}/feed/${it.id}/liked`, {
+          const res = await fetch(`${BASE}/feed/${it.id}/liked`, {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
 
@@ -87,7 +84,7 @@
   }
 
   function buildFeedURL(after: string | null = null) {
-    const url = new URL(`${API_BASE}/feed`);
+    const url = new URL(`${BASE}/feed`);
     url.searchParams.set('sort', sort);
     url.searchParams.set('limit', String(limit));
 
@@ -151,7 +148,7 @@
     const method = currentlyLiked ? 'DELETE' : 'POST';
 
     try {
-      const res = await fetch(`${API_BASE}/feed/${bookId}/like`, {
+      const res = await fetch(`${BASE}/feed/${bookId}/like`, {
         method,
         headers: { Authorization: `Bearer ${accessToken}` },
       });
