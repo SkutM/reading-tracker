@@ -1,15 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { BASE } from '$lib/api';
 
-  // ✅ Option A: make the prop optional
   export let onReady: () => void = () => {};
 
   let msg = "Please wait while the server wakes up";
   let dots = "";
   let spin: ReturnType<typeof setInterval> | undefined;
   let poll: ReturnType<typeof setInterval> | undefined;
-
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
   function cleanup() {
     if (spin) clearInterval(spin);
@@ -20,12 +18,12 @@
 
   function notifyReady() {
     cleanup();
-    onReady(); // ✅ Option A: safe optional call
+    onReady();
   }
 
   async function checkHealth() {
     try {
-      const res = await fetch(`${API_BASE}/health`, { cache: 'no-store' });
+      const res = await fetch(`${BASE}/health`, { cache: 'no-store' });
       if (!res.ok) return;
 
       const data = await res.json();
@@ -42,13 +40,13 @@
       dots = dots.length < 3 ? dots + "." : "";
     }, 400);
 
-    // optionally check immediately so we don’t wait 2s on warm backend
     checkHealth();
     poll = setInterval(checkHealth, 2000);
 
     return cleanup;
   });
 </script>
+
 
 <div class="gate">
   <h2>{msg}<span class="dots">{dots}</span></h2>
