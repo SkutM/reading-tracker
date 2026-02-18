@@ -32,9 +32,7 @@ def list_comments(db: Session, book_id: int) -> list[dict]:
         db.query(Book)
         .join(User, Book.owner_id == User.id)
         .filter(
-            Book.id == book_id,
-            Book.visibility == "PUBLIC",
-            User.profile_visibility == "PUBLIC",
+            Book.id == book_id
         )
         .first()
     )
@@ -73,9 +71,7 @@ def add_comment(db: Session, book_id: int, user_id: int, body: str) -> dict:
         db.query(Book)
         .join(User, Book.owner_id == User.id)
         .filter(
-            Book.id == book_id,
-            Book.visibility == "PUBLIC",
-            User.profile_visibility == "PUBLIC",
+            Book.id == book_id
         )
         .first()
     )

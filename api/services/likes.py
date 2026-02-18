@@ -13,9 +13,7 @@ def _get_public_book_or_none(db: Session, book_id: int) -> Book | None:
         db.query(Book)
         .join(User, Book.owner_id == User.id)
         .filter(
-            Book.id == book_id,
-            Book.visibility == "PUBLIC",
-            User.profile_visibility == "PUBLIC",
+            Book.id == book_id
         )
         .first()
     )

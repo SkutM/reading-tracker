@@ -151,7 +151,6 @@ def get_public_feed(
                 "review_type": _review_type_label(b),
                 "review_date": b.review_date.isoformat() if b.review_date else None,
                 "created_at": b.created_at.isoformat() if b.created_at else None,
-                "visibility": b.visibility,
                 "like_count": b.like_count or 0,
                 "comment_count": b.comment_count or 0,
             }
@@ -169,9 +168,7 @@ def get_public_feed_item(db: Session, book_id: int) -> Optional[Dict[str, Any]]:
         db.query(Book)
         .join(User, Book.owner_id == User.id)
         .filter(
-            Book.id == book_id,
-            Book.visibility == "PUBLIC",
-            User.profile_visibility == "PUBLIC",
+            Book.id == book_id
         )
         .first()
     )
@@ -198,7 +195,6 @@ def get_public_feed_item(db: Session, book_id: int) -> Optional[Dict[str, Any]]:
         # Option B: derived label from is_recommended
         "review_type": _review_type_label(book),
         "review_date": book.review_date.isoformat() if book.review_date else None,
-        "visibility": book.visibility,
         "like_count": book.like_count or 0,
         "comment_count": book.comment_count or 0,
         "created_at": book.created_at.isoformat() if book.created_at else None,
@@ -219,9 +215,7 @@ def _get_public_book_for_engagement(db: Session, book_id: int) -> Optional[Book]
         db.query(Book)
         .join(User, Book.owner_id == User.id)
         .filter(
-            Book.id == book_id,
-            Book.visibility == "PUBLIC",
-            User.profile_visibility == "PUBLIC",
+            Book.id == book_id
         )
         .first()
     )
@@ -299,9 +293,7 @@ def list_comments(db: Session, book_id: int) -> list[dict]:
         db.query(Book)
         .join(User, Book.owner_id == User.id)
         .filter(
-            Book.id == book_id,
-            Book.visibility == "PUBLIC",
-            User.profile_visibility == "PUBLIC",
+            Book.id == book_id
         )
         .first()
     )
@@ -343,9 +335,7 @@ def add_comment(db: Session, user_id: int, book_id: int, body: str) -> dict:
         db.query(Book)
         .join(User, Book.owner_id == User.id)
         .filter(
-            Book.id == book_id,
-            Book.visibility == "PUBLIC",
-            User.profile_visibility == "PUBLIC",
+            Book.id == book_id
         )
         .first()
     )

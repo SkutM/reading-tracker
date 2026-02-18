@@ -17,9 +17,6 @@ def run():
                 username=f"user{i}",
                 password_hash="not_used_in_seed",  # just to satisfy NOT NULL
             )
-            # profile_visibility column was added via migration
-            if hasattr(u, "profile_visibility"):
-                u.profile_visibility = "PUBLIC"
 
             db.add(u)
             users.append(u)
@@ -50,9 +47,6 @@ def run():
                 created_at=created_dt,
                 owner_id=owner.id,
             )
-
-            if hasattr(b, "visibility"):
-                b.visibility = "PUBLIC"
 
             if hasattr(b, "review_date"):
                 b.review_date = rd
