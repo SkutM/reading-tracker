@@ -342,7 +342,6 @@
     margin-bottom: 6px;
   }
 
-  .control input,
   .control select {
     width: 100%;
     padding: 10px 7px;
