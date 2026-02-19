@@ -24,72 +24,37 @@
     created_at: string | null;
     like_count: number;
     comment_count: number;
+    liked_by_me: boolean;
   };
 
   type FeedResponse = { items: FeedItem[]; next_cursor: string | null };
 
-  //  controls state (UI)
   let sort: SortMode = 'newest';
   let reviewType: ReviewType | 'ALL' = 'ALL';
   let limit = 20;
 
-  //  data state 
   let items: FeedItem[] = [];
   let loading = true;
   let error: string | null = null;
   let nextCursor: string | null = null;
 
-  //  auth state (for likes) 
   let accessToken: string | null = null;
   let isAuthenticated = false;
 
   $: accessToken = $authStore.token;
   $: isAuthenticated = $authStore.isAuthenticated;
 
-  // per-item like UI state (for the button)
   let liked: Record<number, boolean> = {};
   let liking: Record<number, boolean> = {};
 
-  let likedByMe: Record<number, boolean> = {};
-
-  async function loadLikedForVisibleItems(list: FeedItem[]) {
-    if (!accessToken) {
-      likedByMe = {};
-      liked = {};
-      return;
-    }
-
-    try {
-      const entries = await Promise.all(
-        list.map(async (it) => {
-          const res = await fetch(`${BASE}/feed/${it.id}/liked`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-
-          if (!res.ok) return [it.id, false] as const;
-
-          const data = (await res.json()) as { liked: boolean };
-          return [it.id, !!data.liked] as const;
-        })
-      );
-
-      const map = Object.fromEntries(entries) as Record<number, boolean>;
-      likedByMe = map;
-      liked = map;
-    } catch {
-      likedByMe = {};
-      liked = {};
-    }
-  }
+  let lastKey = '';
 
   function buildFeedURL(after: string | null = null) {
     const url = new URL(`${BASE}/feed`);
     url.searchParams.set('sort', sort);
     url.searchParams.set('limit', String(limit));
-
     if (reviewType !== 'ALL') url.searchParams.set('review_type', reviewType);
     if (after) url.searchParams.set('after', after);
-
     return url;
   }
 
@@ -99,15 +64,25 @@
 
     try {
       const url = buildFeedURL(after);
-      const res = await fetch(url.toString());
+
+      const headers: Record<string, string> = {};
+      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+      const res = await fetch(url.toString(), { headers });
       if (!res.ok) throw new Error(`Feed request failed (${res.status})`);
 
       const data = (await res.json()) as FeedResponse;
 
-      items = after ? [...items, ...(data.items ?? [])] : (data.items ?? []);
+      const newItems = data.items ?? [];
+      items = after ? [...items, ...newItems] : newItems;
       nextCursor = data.next_cursor ?? null;
 
-      await loadLikedForVisibleItems(items);
+      const map = Object.fromEntries(newItems.map((it) => [it.id, !!it.liked_by_me])) as Record<
+        number,
+        boolean
+      >;
+
+      liked = after ? { ...liked, ...map } : map;
     } catch (e: any) {
       error = e?.message ?? 'Failed to load feed';
     } finally {
@@ -118,13 +93,20 @@
   function applyFilters() {
     items = [];
     nextCursor = null;
-    likedByMe = {};
     liked = {};
     loadFeed(null);
   }
 
-  // initial load after BootGate
-  $: if (bootReady) loadFeed(null);
+  $: if (bootReady) {
+    const key = `${sort}|${reviewType}|${limit}|${accessToken ?? ''}`;
+    if (key !== lastKey) {
+      lastKey = key;
+      items = [];
+      nextCursor = null;
+      liked = {};
+      loadFeed(null);
+    }
+  }
 
   function formatDate(s?: string | null) {
     if (!s) return '';
@@ -154,13 +136,14 @@
 
       if (!res.ok) throw new Error(`Like request failed (${res.status})`);
 
-      const data = await res.json(); // { liked: boolean, like_count: number }
+      const data = await res.json();
 
       liked = { ...liked, [bookId]: !!data.liked };
-      likedByMe = { ...likedByMe, [bookId]: !!data.liked };
 
       items = items.map((it) =>
-        it.id === bookId ? { ...it, like_count: data.like_count ?? it.like_count } : it
+        it.id === bookId
+          ? { ...it, like_count: data.like_count ?? it.like_count, liked_by_me: !!data.liked }
+          : it
       );
     } catch (err) {
       console.error(err);
@@ -245,7 +228,7 @@
                   </div>
 
                   <div class="right">
-                    <div>{likedByMe[it.id] ? '❤️' : '🤍'} {it.like_count}</div>
+                    <div>{liked[it.id] ? '❤️' : '🤍'} {it.like_count}</div>
                     <div>💬 {it.comment_count}</div>
 
                     <button
