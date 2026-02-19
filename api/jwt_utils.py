@@ -31,13 +31,12 @@ def decode_access_token(token: str):
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload
     except JWTError:
-        # if decoding or validation fails (e.g., token expir, wrong signature)
+        # if decoding or validation fails
         return None
     
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """dependency that verifies the jwt & fetches the corresponding User obj"""
 
-    # typically add blocklist check here
     
     payload = decode_access_token(token)
     if payload is None:

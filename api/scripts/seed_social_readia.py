@@ -51,7 +51,6 @@ def run():
             if hasattr(b, "review_date"):
                 b.review_date = rd
 
-            # (Optional) remove this if you’re now mapping review_type from is_recommended
             if hasattr(b, "review_type"):
                 b.review_type = random.choice(["RECOMMENDED", "NOT_RECOMMENDED", "NEUTRAL"])
 

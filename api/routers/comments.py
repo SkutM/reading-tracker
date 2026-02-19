@@ -18,7 +18,7 @@ class CommentCreate(BaseModel):
 
 @router.get("/{book_id}")
 def public_comments(book_id: int, db: Session = Depends(get_db)):
-    # Public: returns [] if not public/not found
+    # returns [] if not public/not found
     return {"items": list_comments(db, book_id)}
 
 

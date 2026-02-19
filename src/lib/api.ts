@@ -10,7 +10,6 @@ if (!BASE) {
 
 function authHeader(): Record<string, string> {
   if (typeof window === 'undefined') return {};
-  // support either key name: 'token' (new) or 'accessToken' (older store)
   const token =
     localStorage.getItem('token') ||
     localStorage.getItem('accessToken');

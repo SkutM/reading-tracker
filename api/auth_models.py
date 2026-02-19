@@ -3,11 +3,11 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from passlib.context import CryptContext
 
-from .database import Base # import existing Base
+from .database import Base
 
-# set up password hashing context (replaces Flask-BCrypt)
+# set up password hashing context
 pwd_context = CryptContext(
-    schemes=["bcrypt_sha256", "bcrypt"],  # new hashes use bcrypt_sha256; old bcrypt hashes still verify
+    schemes=["bcrypt_sha256", "bcrypt"],
     deprecated="auto",
 )
 

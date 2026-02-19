@@ -28,18 +28,18 @@
 
   type FeedResponse = { items: FeedItem[]; next_cursor: string | null };
 
-  // ---- Controls state (UI) ----
+  //  controls state (UI)
   let sort: SortMode = 'newest';
   let reviewType: ReviewType | 'ALL' = 'ALL';
   let limit = 20;
 
-  // ---- Data state ----
+  //  data state 
   let items: FeedItem[] = [];
   let loading = true;
   let error: string | null = null;
   let nextCursor: string | null = null;
 
-  // ---- Auth state (for likes) ----
+  //  auth state (for likes) 
   let accessToken: string | null = null;
   let isAuthenticated = false;
 
@@ -50,7 +50,6 @@
   let liked: Record<number, boolean> = {};
   let liking: Record<number, boolean> = {};
 
-  // Option A: "liked by me" state per item (loaded after feed loads)
   let likedByMe: Record<number, boolean> = {};
 
   async function loadLikedForVisibleItems(list: FeedItem[]) {
@@ -181,7 +180,6 @@
       <a class="backlink" href="/library">My Library</a>
     </div>
 
-    <!-- Controls (3 options now) -->
     <div class="controls">
       <div class="control">
         <label for="sort">Sort</label>
@@ -320,7 +318,6 @@
   .more:hover { background: #2ea043; }
   .more:disabled { opacity: 0.7; cursor: not-allowed; }
 
-  /* --------- NEW: controls layout tuned for 3 selects --------- */
   .controls {
     margin-top: 10px;
     margin-bottom: 10px;
@@ -330,7 +327,7 @@
     background: #1c1f24;
 
     display: grid;
-    grid-template-columns: 1fr 1fr 120px auto; /* Sort | Review type | Limit | Apply */
+    grid-template-columns: 1fr 1fr 120px auto;
     gap: 10px;
     align-items: end;
   }
@@ -378,7 +375,6 @@
   .apply:hover { background: #2ea043; }
   .apply:disabled { opacity: 0.7; cursor: not-allowed; }
 
-  /* Responsive: stack nicely */
   @media (max-width: 860px) {
     .controls {
       grid-template-columns: 1fr 1fr;
@@ -401,7 +397,6 @@
     border-radius: 12px;
   }
 
-  /* --- Like button --- */
   .likebtn {
     margin-top: 10px;
     padding: 8px 10px;

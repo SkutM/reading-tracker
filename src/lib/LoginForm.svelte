@@ -24,13 +24,13 @@
     }
 
     try {
-      // 1) Get token
+      // 1) get token
       const { access_token } = await loginUser({ username: e, password: p });
 
-      // 2) Fetch real user profile (must include real id)
+      // 2) fetch real user profile (must include real id)
       const me = (await getProfile(access_token)) as UserResponse;
 
-      // 3) Persist auth state (token + real user)
+      // 3) persist auth state (token + real user)
       login(access_token, me);
 
       message = `Welcome, ${me.username ?? e}!`;

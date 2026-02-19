@@ -7,7 +7,7 @@ from .database import get_db
 from .auth_models import User, pwd_context, TokenBlocklist
 from .config import settings
 
-# init FastAPI router (similar to Flask bp)
+# init FastAPI router
 auth_router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
