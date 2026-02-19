@@ -111,8 +111,11 @@
   function formatDate(s?: string | null) {
     if (!s) return '';
     const d = new Date(s);
-    return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+    return isNaN(d.getTime())
+      ? ''
+      : d.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' });
   }
+
 
   async function toggleLike(e: Event, bookId: number) {
     e.preventDefault();

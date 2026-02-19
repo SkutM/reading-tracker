@@ -40,8 +40,11 @@
   function formatDateISO(s?: string | null): string {
     if (!s) return '—';
     const d = new Date(s);
-    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+    return isNaN(d.getTime())
+      ? '—'
+      : d.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' });
   }
+
 
   // fetch books when authenticated
   async function fetchBooks() {
