@@ -1,5 +1,3 @@
-# api/services/feed.py
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -12,13 +10,7 @@ from api.models import Book, Like, Comment
 from api.auth_models import User
 
 
-# Cursor helpers (datetime|id)
-
 def _parse_cursor(cursor: Optional[str]) -> Optional[Tuple[datetime, int]]:
-    """
-    Cursor format: "<ISO_DATETIME>|<id>"
-    Example: "2026-01-06T05:11:57.400119|31"
-    """
     if not cursor:
         return None
     ts, id_str = cursor.split("|", 1)
@@ -29,15 +21,7 @@ def _encode_cursor(dt: datetime, rid: int) -> str:
     return f"{dt.isoformat()}|{rid}"
 
 
-# Review type mapping 
-
 def _review_type_label(b: Book) -> Optional[str]:
-    """
-    Map Book.is_recommended -> API review_type label.
-    True  -> "RECOMMENDED"
-    False -> "NOT_RECOMMENDED"
-    None/missing -> None (keep blank)
-    """
     val = getattr(b, "is_recommended", None)
     if val is True:
         return "RECOMMENDED"
@@ -46,8 +30,6 @@ def _review_type_label(b: Book) -> Optional[str]:
     return None
 
 
-# Public feed (LIST)
-
 def get_public_feed(
     db: Session,
     sort: str = "newest",
@@ -55,13 +37,12 @@ def get_public_feed(
     review_type: Optional[str] = None,
     limit: int = 20,
     after: Optional[str] = None,
+    user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
+    print("DEBUG user_id =", user_id)
     cursor = _parse_cursor(after)
 
-    q = (
-        db.query(Book)
-        .join(User, Book.owner_id == User.id)
-    )
+    q = db.query(Book).join(User, Book.owner_id == User.id)
 
     if genre and hasattr(Book, "genre"):
         q = q.filter(getattr(Book, "genre") == genre)
@@ -82,19 +63,13 @@ def get_public_feed(
                 (Book.created_at > cursor[0])
                 | and_(Book.created_at == cursor[0], Book.id > cursor[1])
             )
-
     elif sort == "review_length":
         order_cols = (desc(func.length(Book.review_text)), desc(Book.id))
         cursor = None
-
     elif sort == "review_type":
         cursor = None
-
         is_rec = getattr(Book, "is_recommended", None)
-
         order_cols = (asc(is_rec), desc(Book.created_at), desc(Book.id))
-
-
     else:
         order_cols = (desc(Book.created_at), desc(Book.id))
         if cursor:
@@ -111,6 +86,16 @@ def get_public_feed(
         last = items[-1]
         if last.created_at:
             next_cursor = _encode_cursor(last.created_at, last.id)
+
+    liked_ids: set[int] = set()
+    if user_id is not None and items:
+        ids = [b.id for b in items]
+        liked_rows = (
+            db.query(Like.review_id)
+            .filter(Like.user_id == user_id, Like.review_id.in_(ids))
+            .all()
+        )
+        liked_ids = {rid for (rid,) in liked_rows}
 
     out: List[Dict[str, Any]] = []
     for b in items:
@@ -138,28 +123,37 @@ def get_public_feed(
                 "created_at": b.created_at.isoformat() if b.created_at else None,
                 "like_count": b.like_count or 0,
                 "comment_count": b.comment_count or 0,
+                "liked_by_me": (b.id in liked_ids) if user_id is not None else False,
             }
         )
 
     return {"items": out, "next_cursor": next_cursor}
 
 
-# Public feed
-
-def get_public_feed_item(db: Session, book_id: int) -> Optional[Dict[str, Any]]:
+def get_public_feed_item(
+    db: Session,
+    book_id: int,
+    user_id: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
     book = (
         db.query(Book)
         .join(User, Book.owner_id == User.id)
-        .filter(
-            Book.id == book_id
-        )
+        .filter(Book.id == book_id)
         .first()
     )
-
     if not book:
         return None
 
     owner = book.owner
+
+    liked = False
+    if user_id is not None:
+        liked = (
+            db.query(Like)
+            .filter(Like.user_id == user_id, Like.review_id == book_id)
+            .first()
+            is not None
+        )
 
     return {
         "id": book.id,
@@ -180,23 +174,15 @@ def get_public_feed_item(db: Session, book_id: int) -> Optional[Dict[str, Any]]:
         "like_count": book.like_count or 0,
         "comment_count": book.comment_count or 0,
         "created_at": book.created_at.isoformat() if book.created_at else None,
+        "liked_by_me": liked if user_id is not None else False,
     }
 
 
-# Likes
-
 def _get_public_book_for_engagement(db: Session, book_id: int) -> Optional[Book]:
-    """
-    Used for like/unlike. Enforces:
-    - Book is PUBLIC
-    - Owner profile is PUBLIC
-    """
     return (
         db.query(Book)
         .join(User, Book.owner_id == User.id)
-        .filter(
-            Book.id == book_id
-        )
+        .filter(Book.id == book_id)
         .first()
     )
 
@@ -211,11 +197,6 @@ def has_liked(db: Session, user_id: int, book_id: int) -> bool:
 
 
 def set_like(db: Session, user_id: int, book_id: int) -> int:
-    """
-    Ensure user has liked this post (idempotent).
-    Returns the new like_count.
-    Raises ValueError if post doesn't exist / isn't public.
-    """
     book = _get_public_book_for_engagement(db, book_id)
     if not book:
         raise ValueError("Post not found")
@@ -236,11 +217,6 @@ def set_like(db: Session, user_id: int, book_id: int) -> int:
 
 
 def unset_like(db: Session, user_id: int, book_id: int) -> int:
-    """
-    Ensure user has unliked this post (idempotent).
-    Returns the new like_count.
-    Raises ValueError if post doesn't exist / isn't public.
-    """
     book = _get_public_book_for_engagement(db, book_id)
     if not book:
         raise ValueError("Post not found")
@@ -260,19 +236,11 @@ def unset_like(db: Session, user_id: int, book_id: int) -> int:
     return book.like_count or 0
 
 
-# Comments
-
 def list_comments(db: Session, book_id: int) -> list[dict]:
-    """
-    Public: list comments for a book (oldest -> newest).
-    Returns [] if book doesn't exist or isn't public.
-    """
     book = (
         db.query(Book)
         .join(User, Book.owner_id == User.id)
-        .filter(
-            Book.id == book_id
-        )
+        .filter(Book.id == book_id)
         .first()
     )
     if not book:
@@ -301,10 +269,6 @@ def list_comments(db: Session, book_id: int) -> list[dict]:
 
 
 def add_comment(db: Session, user_id: int, book_id: int, body: str) -> dict:
-    """
-    Auth: add a comment (returns created comment as dict).
-    Raises ValueError if post not found or not public.
-    """
     body = (body or "").strip()
     if not body:
         raise ValueError("Empty comment")
@@ -312,9 +276,7 @@ def add_comment(db: Session, user_id: int, book_id: int, body: str) -> dict:
     book = (
         db.query(Book)
         .join(User, Book.owner_id == User.id)
-        .filter(
-            Book.id == book_id
-        )
+        .filter(Book.id == book_id)
         .first()
     )
     if not book:

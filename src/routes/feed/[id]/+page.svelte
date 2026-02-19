@@ -6,7 +6,6 @@
 
   let bootReady = false;
 
-
   type ReviewType = 'RECOMMENDED' | 'NOT_RECOMMENDED';
 
   type FeedDetail = {
@@ -19,6 +18,7 @@
     like_count: number;
     comment_count: number;
     created_at: string | null;
+    liked_by_me: boolean;
   };
 
   type CommentItem = {
@@ -33,15 +33,15 @@
   let loading = true;
   let error: string | null = null;
 
-  // auth-derived
+  let accessToken: string | null = null;
+  let currentUser: any = null;
+
   $: accessToken = $authStore.token;
   $: currentUser = $authStore.user;
 
-  // like state
   let liked = false;
   let likeBusy = false;
 
-  // comments state
   let comments: CommentItem[] = [];
   let commentsLoading = false;
   let commentsError: string | null = null;
@@ -49,14 +49,10 @@
   let newComment = '';
   let commentBusy = false;
 
-  // deletion UI state
   let deletingCommentId: number | null = null;
   let deleteError: string | null = null;
 
-  // --------------------------------------------------
-  // "Read more" state (GFG-style, but Svelte-idiomatic)
-  // --------------------------------------------------
-  const PREVIEW_CHARS = 280; // <-- tweak this
+  const PREVIEW_CHARS = 280;
   let expandedComments: Record<number, boolean> = {};
 
   function isExpanded(id: number) {
@@ -75,10 +71,9 @@
     if (!t) return { text: '', truncated: false };
     if (t.length <= limit) return { text: t, truncated: false };
 
-    // try to avoid cutting mid-word by backing up to last whitespace
     const slice = t.slice(0, limit);
-    const lastSpace = slice.search(/\s(?!.*\s)/); // last whitespace index
-    const cutIndex = lastSpace > 40 ? lastSpace : limit; // fallback for no-whitespace strings
+    const lastSpace = slice.search(/\s(?!.*\s)/);
+    const cutIndex = lastSpace > 40 ? lastSpace : limit;
 
     const out = t.slice(0, cutIndex).trimEnd();
     return { text: out, truncated: true };
@@ -96,24 +91,6 @@
     return isNaN(d.getTime()) ? '' : d.toLocaleString();
   }
 
-  async function loadLikedStatus(id: string) {
-    if (!accessToken) {
-      liked = false;
-      return;
-    }
-
-    try {
-      const res = await fetch(`${BASE}/feed/${id}/liked`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!res.ok) return; // don’t hard-fail the page if this fails
-      const data = await res.json();
-      liked = !!data?.liked;
-    } catch {
-      // ignore
-    }
-  }
-
   async function loadComments(id: string) {
     commentsLoading = true;
     commentsError = null;
@@ -123,8 +100,6 @@
       if (!res.ok) throw new Error(`Comments request failed (${res.status})`);
       const data = await res.json();
       comments = (data.items ?? []) as CommentItem[];
-
-      // reset expansion state per-post
       expandedComments = {};
     } catch (e: any) {
       commentsError = e?.message ?? 'Failed to load comments';
@@ -140,7 +115,6 @@
     error = null;
     item = null;
 
-    // reset comments per-post while loading
     comments = [];
     commentsError = null;
     deleteError = null;
@@ -148,14 +122,15 @@
     expandedComments = {};
 
     try {
-      const res = await fetch(`${BASE}/feed/${id}`);
+      const headers: Record<string, string> = {};
+      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+      const res = await fetch(`${BASE}/feed/${id}`, { headers });
       if (!res.ok) throw new Error(`Post request failed (${res.status})`);
+
       item = (await res.json()) as FeedDetail;
+      liked = !!item.liked_by_me;
 
-      // once item exists, fetch liked status (if logged in)
-      await loadLikedStatus(id);
-
-      // load comments after item is set
       await loadComments(id);
     } catch (e: any) {
       error = e?.message ?? 'Failed to load post';
@@ -190,8 +165,11 @@
       const data = await res.json();
       liked = !!data?.liked;
 
-      // update count from server (source of truth)
-      item.like_count = Number(data?.like_count ?? item.like_count);
+      item = {
+        ...item,
+        like_count: Number(data?.like_count ?? item.like_count),
+        liked_by_me: !!data?.liked,
+      };
     } catch (e: any) {
       alert(e?.message ?? 'Failed to update like');
     } finally {
@@ -228,8 +206,7 @@
       comments = [...comments, c];
       newComment = '';
 
-      // keep the visible count in sync
-      item.comment_count = (item.comment_count ?? 0) + 1;
+      item = { ...item, comment_count: (item.comment_count ?? 0) + 1 };
     } catch (e: any) {
       alert(e?.message ?? 'Failed to post comment');
     } finally {
@@ -252,29 +229,20 @@
     try {
       const res = await fetch(`${BASE}/feed/comments/${commentId}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
-      if (res.status === 403) {
-        throw new Error('You can only delete your own comments.');
-      }
-      if (!res.ok) {
-        throw new Error(`Failed to delete comment (${res.status})`);
-      }
+      if (res.status === 403) throw new Error('You can only delete your own comments.');
+      if (!res.ok) throw new Error(`Failed to delete comment (${res.status})`);
 
-      // optimistic local update
       comments = comments.filter((c) => c.id !== commentId);
 
-      // also clean up expanded state
       if (expandedComments[commentId]) {
         const { [commentId]: _, ...rest } = expandedComments;
         expandedComments = rest;
       }
 
-      // keep the visible count in sync
-      item.comment_count = Math.max(0, (item.comment_count ?? 0) - 1);
+      item = { ...item, comment_count: Math.max(0, (item.comment_count ?? 0) - 1) };
     } catch (e: any) {
       deleteError = e?.message ?? 'Failed to delete comment';
     } finally {
@@ -286,7 +254,6 @@
     return !!currentUser && c.user?.id === currentUser.id;
   }
 
-  // reload when route id changes (and after boot)
   $: if (bootReady) {
     const id = $page.params.id;
     if (id) loadOne(id);
@@ -358,7 +325,6 @@
             <p class="muted">No comments yet.</p>
           {:else}
             <ul class="commentlist">
-              
               {#each comments as c (c.id)}
                 {@const p = previewText(c.body)}
 
@@ -495,24 +461,21 @@
     border: 1px solid #30363d;
     border-radius: 10px;
     padding: 10px;
-    overflow: hidden; /* safety: prevents horizontal bleed */
+    overflow: hidden;
   }
   .commentmeta { font-size: 0.85rem; color: #8b949e; display: flex; gap: 8px; align-items: center; }
   .commentuser { color: #c9d1d9; font-weight: 700; }
 
-  /* Wrap correctly (no scroll, no overflow) */
   .commentbody {
     margin-top: 6px;
     color: #e6edf3;
     white-space: pre-wrap;
-    overflow-wrap: anywhere; /* breaks long URLs/tokens */
+    overflow-wrap: anywhere;
     word-break: normal;
     max-width: 100%;
   }
 
-  .dots {
-    display: inline;
-  }
+  .dots { display: inline; }
 
   .readmore {
     margin-top: 4px;

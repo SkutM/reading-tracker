@@ -1,10 +1,8 @@
-# api/routers/feed.py
-
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..jwt_utils import get_current_user
+from ..jwt_utils import get_current_user, get_current_user_optional
 from ..auth_models import User
 
 from ..services.feed import (
@@ -28,13 +26,11 @@ router = APIRouter(prefix="/feed", tags=["feed"])
 def public_feed(
     sort: str = Query("newest", pattern="^(newest|oldest|review_length|review_type)$"),
     genre: str | None = None,
-    review_type: str | None = Query(
-        None,
-        pattern="^(RECOMMENDED|NOT_RECOMMENDED|NEUTRAL)$",
-    ),
+    review_type: str | None = Query(None, pattern="^(RECOMMENDED|NOT_RECOMMENDED|NEUTRAL)$"),
     limit: int = Query(20, ge=1, le=50),
     after: str | None = None,
     db: Session = Depends(get_db),
+    user: User | None = Depends(get_current_user_optional),
 ):
     return get_public_feed(
         db,
@@ -43,18 +39,21 @@ def public_feed(
         review_type=review_type,
         limit=limit,
         after=after,
+        user_id=(user.id if user else None),
     )
 
 
 @router.get("/{book_id}")
-def public_feed_item(book_id: int, db: Session = Depends(get_db)):
-    item = get_public_feed_item(db, book_id=book_id)
+def public_feed_item(
+    book_id: int,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_current_user_optional),
+):
+    item = get_public_feed_item(db, book_id=book_id, user_id=(user.id if user else None))
     if not item:
         raise HTTPException(status_code=404, detail="Post not found")
     return item
 
-
-# Likes
 
 @router.post("/{book_id}/like")
 def like_post(
@@ -88,12 +87,8 @@ def liked_status(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return {
-        "book_id": book_id,
-        "liked": has_liked(db, user_id=user.id, book_id=book_id),
-    }
+    return {"book_id": book_id, "liked": has_liked(db, user_id=user.id, book_id=book_id)}
 
-# Comments
 
 @router.get("/{book_id}/comments")
 def get_comments(book_id: int, db: Session = Depends(get_db)):
@@ -112,12 +107,10 @@ def post_comment(
     try:
         c = add_comment(db, user_id=user.id, book_id=book_id, body=body)
         return {"book_id": book_id, "comment": c}
-
     except ValueError as e:
         msg = str(e)
 
         if msg == "book_not_commentable":
-            # book doesn't exist OR not public OR owner profile not public
             raise HTTPException(status_code=404, detail="Post not found")
 
         if msg == "empty_body":
@@ -140,6 +133,5 @@ def delete_comment_route(
         if not ok:
             raise HTTPException(status_code=404, detail="Comment not found")
         return {"ok": True}
-
     except PermissionError:
         raise HTTPException(status_code=403, detail="Not allowed")
