@@ -1,58 +1,54 @@
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
+from datetime import datetime
 from typing import List
-import requests
-from fastapi.middleware.cors import CORSMiddleware
 
-from api.database import engine, SessionLocal, get_db, Base
-from api import models, auth_models, schemas, auth_routes, jwt_utils
+import requests
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+
+from api import models, auth_routes, jwt_utils, schemas
 from api.auth_models import User
+from api.database import engine, get_db, Base
 from api.routers import health, feed
+from api.utils.time import iso_utc
 from .routers import comments
-import api.database as db_mod  # only for the debug prints below
+import api.database as db_mod
+
 
 print("DB MODULE FILE:", db_mod.__file__)
 print("ENGINE DIALECT:", engine.dialect.name)
 print("ENGINE URL:", str(engine.url))
 
 
-# alembic handles tables created if they don't alr exist
-
-# util function to search Open Library for a cover URL
-
 def fetch_book_cover(title: str, author: str) -> str | None:
     search_url = "https://openlibrary.org/search.json"
-
-    # query combining title & author
     query = f"title: ({title}) AND author:({author})" if author else f"title:({title})"
 
     try:
-        response = requests.get(search_url, params={'q': query, 'limit': 1}, timeout=5)
-        response.raise_for_status() # raise exception for bad status codes
-
+        response = requests.get(search_url, params={"q": query, "limit": 1}, timeout=5)
+        response.raise_for_status()
         data = response.json()
 
-        # check if any docs were returned
-        if data.get('numFound') > 0 and data.get('docs'):
-            first_doc = data['docs'][0]
-
-            # Open Lib uses a cover ID to link to a separate img service
-            if 'cover_i' in first_doc:
-                cover_id = first_doc['cover_i']
-                # construct cover img url using the medium size (M)
-                cover_url = f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
-                return cover_url
-    
+        if data.get("numFound", 0) > 0 and data.get("docs"):
+            first_doc = data["docs"][0]
+            cover_id = first_doc.get("cover_i")
+            if cover_id:
+                return f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
     except requests.exceptions.RequestException as e:
         print(f"Error fetching cover from Open Library: {e}")
         return None
-    
+
     return None
 
-# fast api init
+
+def json_utc(payload):
+    return JSONResponse(content=jsonable_encoder(payload, custom_encoder={datetime: iso_utc}))
+
+
 app = FastAPI()
 
-# auth cors middleware
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -60,158 +56,139 @@ origins = [
     "https://reading-tracker-git-main-scotts-projects-69acb861.vercel.app",
     "https://reading-tracker-cezljv7u7-scotts-projects-69acb861.vercel.app",
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_origin_regex=r"^https://reading-tracker-.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
+
 
 @app.on_event("startup")
 def _create_tables():
     Base.metadata.create_all(bind=engine)
 
 
-# auth router
 app.include_router(auth_routes.auth_router)
-
-# social readia / infra routers
 app.include_router(health.router)
 app.include_router(feed.router)
 app.include_router(comments.router)
 
-# db health check
+
 @app.get("/ping-db")
 def ping_db():
     with engine.connect() as conn:
         conn.exec_driver_sql("SELECT 1;")
     return {"db": "online"}
 
-# Endpoint to check API status
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Reading Tracker API!"}
 
-# CRUD logic: create a book
+
 @app.post("/books/", response_model=schemas.Book)
 def create_book(
     book: schemas.BookCreate,
-    # require auth, below
     current_user: User = Depends(jwt_utils.get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-
-    # fetch cover img url
     cover_url = fetch_book_cover(book.title, book.author or "")
 
-    # create an instance of the SQLAlchemy model
     db_book = models.Book(
         title=book.title,
         author=book.author,
-        # save fetched url here
         cover_image_url=cover_url,
         review_text=book.review_text,
         is_recommended=book.is_recommended,
-        # set foreign key
-        owner_id=current_user.id
+        owner_id=current_user.id,
     )
     db.add(db_book)
     db.commit()
-    db.refresh(db_book) # get the final obj w/ the db-generated ID/timestamps
-    return db_book
+    db.refresh(db_book)
+    return json_utc(db_book)
 
-# CRUD: read all books
+
 @app.get("/books/", response_model=List[schemas.Book])
 def read_books(
-    skip: int = 0, 
+    skip: int = 0,
     limit: int = 100,
-    # require auth, below
     current_user: User = Depends(jwt_utils.get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    # new auth below, see comment
-    # query all books from the db -- *only books owned by curr user*
-    books = db.query(models.Book).filter(models.Book.owner_id == current_user.id).offset(skip).limit(limit).all()
-    return books
+    books = (
+        db.query(models.Book)
+        .filter(models.Book.owner_id == current_user.id)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return json_utc(books)
 
-# CRUD: Read a single book
+
 @app.get("/books/{book_id}", response_model=schemas.Book)
 def read_book(
     book_id: int,
-    # auth below
     current_user: User = Depends(jwt_utils.get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    # query one book by its ID (and enforce ownership, auth)
-    book = db.query(models.Book).filter(
-        models.Book.id == book_id,
-        # ownership check below
-        models.Book.owner_id == current_user.id
-    ).first()
+    book = (
+        db.query(models.Book)
+        .filter(models.Book.id == book_id, models.Book.owner_id == current_user.id)
+        .first()
+    )
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
-    return book
+    return json_utc(book)
 
-# CRUD: Update a Book
+
 @app.put("/books/{book_id}", response_model=schemas.Book)
 def update_book(
     book_id: int,
-    book_update: schemas.BookUpdate, # re-use the BookCreate schema for updates
+    book_update: schemas.BookUpdate,
     current_user: User = Depends(jwt_utils.get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    # 1. Query the book and enforce ownership
-    db_book = db.query(models.Book).filter(
-        models.Book.id == book_id,
-        models.Book.owner_id == current_user.id # ownership check
-    ).first()
-
+    db_book = (
+        db.query(models.Book)
+        .filter(models.Book.id == book_id, models.Book.owner_id == current_user.id)
+        .first()
+    )
     if db_book is None:
         raise HTTPException(status_code=404, detail="Book not found")
-    
-    # 2. update all fields w/ data from the request body
-    # we use dicts to iterate thru all fields in pydantic schema
+
     update_data = book_update.model_dump(exclude_unset=True)
 
-    # for cover, re-fetch
     if "title" in update_data or "author" in update_data:
-        # use incoming new title/author, fall back to existing if not provided
         new_title = update_data.get("title", db_book.title)
         new_author = update_data.get("author", db_book.author or "")
-
-        # fetch new cover url & update book obj
-        new_cover_url = fetch_book_cover(new_title, new_author)
-        db_book.cover_image_url = new_cover_url
+        db_book.cover_image_url = fetch_book_cover(new_title, new_author)
 
     for key, value in update_data.items():
         setattr(db_book, key, value)
 
-    # 3. Commit changes
     db.commit()
     db.refresh(db_book)
+    return json_utc(db_book)
 
-    return db_book
 
-# CRUD: Delete a Book
 @app.delete("/books/{book_id}", status_code=204)
 def delete_book(
     book_id: int,
     current_user: User = Depends(jwt_utils.get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    # Query one book by its ID & enforce ownership
-    book = db.query(models.Book).filter(
-        models.Book.id == book_id,
-        models.Book.owner_id == current_user.id # ownership check
-    ).first()
-
+    book = (
+        db.query(models.Book)
+        .filter(models.Book.id == book_id, models.Book.owner_id == current_user.id)
+        .first()
+    )
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
-    
+
     db.delete(book)
     db.commit()
-
-    # 204 No Content is the standard response for a successful DELETE
     return {}

@@ -17,6 +17,7 @@ class Book(Base):
     review_text = Column(Text)
     is_recommended = Column(Boolean)
 
+
     # metadata
     read_on = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
