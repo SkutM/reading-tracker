@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env.backend",
         env_file_encoding="utf-8",
-        extra="forbid",   # keep strict if you want
+        extra="forbid",
     )
 
 settings = Settings()

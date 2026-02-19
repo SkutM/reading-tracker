@@ -27,7 +27,6 @@ def toggle_like(db: Session, book_id: int, user_id: int) -> tuple[bool, int]:
     """
     book = _get_public_book_or_none(db, book_id)
     if not book:
-        # caller will translate this to 404
         raise ValueError("Post not found")
 
     existing = (

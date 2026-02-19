@@ -54,9 +54,7 @@ def public_feed_item(book_id: int, db: Session = Depends(get_db)):
     return item
 
 
-# -------------------------
-# Likes (requires auth)
-# -------------------------
+# Likes
 
 @router.post("/{book_id}/like")
 def like_post(
@@ -95,9 +93,7 @@ def liked_status(
         "liked": has_liked(db, user_id=user.id, book_id=book_id),
     }
 
-# -------------------------
 # Comments
-# -------------------------
 
 @router.get("/{book_id}/comments")
 def get_comments(book_id: int, db: Session = Depends(get_db)):

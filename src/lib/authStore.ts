@@ -104,7 +104,7 @@ export async function hydrateUser(API_BASE: string) {
   const token = readToken();
   if (!token) return;
 
-  // If user missing or id is falsy (0/null), fetch the real user
+  // If user missing or id is 0/null, fetch the real user
   let existing: UserResponse | null = readUser();
   const existingId = (existing as any)?.id;
 

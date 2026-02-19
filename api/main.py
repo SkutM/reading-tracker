@@ -53,7 +53,6 @@ def fetch_book_cover(title: str, author: str) -> str | None:
 app = FastAPI()
 
 # auth cors middleware
-# OPTIONS pre-flight checks, even with Vite proxy
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",

@@ -12,9 +12,7 @@ from api.models import Book, Like, Comment
 from api.auth_models import User
 
 
-# --------------------------------------------------
 # Cursor helpers (datetime|id)
-# --------------------------------------------------
 
 def _parse_cursor(cursor: Optional[str]) -> Optional[Tuple[datetime, int]]:
     """
@@ -31,9 +29,7 @@ def _encode_cursor(dt: datetime, rid: int) -> str:
     return f"{dt.isoformat()}|{rid}"
 
 
-# --------------------------------------------------
-# Review type mapping (Option B)
-# --------------------------------------------------
+# Review type mapping 
 
 def _review_type_label(b: Book) -> Optional[str]:
     """
@@ -50,9 +46,7 @@ def _review_type_label(b: Book) -> Optional[str]:
     return None
 
 
-# --------------------------------------------------
 # Public feed (LIST)
-# --------------------------------------------------
 
 def get_public_feed(
     db: Session,
@@ -72,18 +66,15 @@ def get_public_feed(
     if genre and hasattr(Book, "genre"):
         q = q.filter(getattr(Book, "genre") == genre)
 
-    # Option B: review_type filter maps to Book.is_recommended
     if review_type:
         is_rec = getattr(Book, "is_recommended", None)
         if review_type == "RECOMMENDED":
-            q = q.filter(is_rec == True)  # noqa: E712
+            q = q.filter(is_rec == True)
         elif review_type == "NOT_RECOMMENDED":
-            q = q.filter(is_rec == False)  # noqa: E712
+            q = q.filter(is_rec == False)
         else:
-            # Treat anything else (e.g. "NEUTRAL") as "no value set"
-            q = q.filter(is_rec == None)  # noqa: E711
+            q = q.filter(is_rec == None)
 
-    # NOTE: Cursor paging is only supported for newest/oldest (created_at-based)
     if sort == "oldest":
         order_cols = (asc(Book.created_at), asc(Book.id))
         if cursor:
@@ -93,22 +84,18 @@ def get_public_feed(
             )
 
     elif sort == "review_length":
-        # no cursor paging here
         order_cols = (desc(func.length(Book.review_text)), desc(Book.id))
         cursor = None
 
     elif sort == "review_type":
-        # no cursor paging here
         cursor = None
 
         is_rec = getattr(Book, "is_recommended", None)
 
-        # Within each bucket: newest first by created_at (always present)
         order_cols = (asc(is_rec), desc(Book.created_at), desc(Book.id))
 
 
     else:
-        # newest (default) — created_at DESC
         order_cols = (desc(Book.created_at), desc(Book.id))
         if cursor:
             q = q.filter(
@@ -120,7 +107,6 @@ def get_public_feed(
     items: List[Book] = q.all()
 
     next_cursor = None
-    # Only provide next_cursor for newest/oldest since those are cursor-paged
     if items and sort in ("newest", "oldest"):
         last = items[-1]
         if last.created_at:
@@ -147,7 +133,6 @@ def get_public_feed(
                     if b.review_text and len(b.review_text) > 280
                     else b.review_text
                 ),
-                # Option B: derived label from is_recommended
                 "review_type": _review_type_label(b),
                 "review_date": b.review_date.isoformat() if b.review_date else None,
                 "created_at": b.created_at.isoformat() if b.created_at else None,
@@ -159,9 +144,7 @@ def get_public_feed(
     return {"items": out, "next_cursor": next_cursor}
 
 
-# --------------------------------------------------
-# Public feed (DETAIL – single item)
-# --------------------------------------------------
+# Public feed
 
 def get_public_feed_item(db: Session, book_id: int) -> Optional[Dict[str, Any]]:
     book = (
@@ -192,7 +175,6 @@ def get_public_feed_item(db: Session, book_id: int) -> Optional[Dict[str, Any]]:
             "username": owner.username if owner else None,
         },
         "body": book.review_text,
-        # Option B: derived label from is_recommended
         "review_type": _review_type_label(book),
         "review_date": book.review_date.isoformat() if book.review_date else None,
         "like_count": book.like_count or 0,
@@ -201,9 +183,7 @@ def get_public_feed_item(db: Session, book_id: int) -> Optional[Dict[str, Any]]:
     }
 
 
-# --------------------------------------------------
-# Likes (service helpers)
-# --------------------------------------------------
+# Likes
 
 def _get_public_book_for_engagement(db: Session, book_id: int) -> Optional[Book]:
     """
@@ -280,9 +260,7 @@ def unset_like(db: Session, user_id: int, book_id: int) -> int:
     return book.like_count or 0
 
 
-# --------------------------------------------------
-# Comments (service helpers)
-# --------------------------------------------------
+# Comments
 
 def list_comments(db: Session, book_id: int) -> list[dict]:
     """
