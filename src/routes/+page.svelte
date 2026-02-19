@@ -14,7 +14,7 @@
     <p>Choose where to go:</p>
 
     <div class="links">
-      <a class="link-btn" href="/feed">→ Public Feed</a>
+      <a class="link-btn" href="/feed">→ Social Readia</a>
 
       {#if isAuthenticated}
         <a class="link-btn" href="/library">→ My Library</a>

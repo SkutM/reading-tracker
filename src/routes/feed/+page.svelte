@@ -159,7 +159,8 @@
 {:else}
   <main class="wrap">
     <div class="topbar">
-      <h1>Public Feed</h1>
+      <h1>Feed</h1>
+      <p class="subtitle">Social Readia</p>
       <a class="backlink" href="/library">My Library</a>
     </div>
 
@@ -264,8 +265,20 @@
   :global(body) { background-color: #0d1117; }
 
   .wrap { max-width: 900px; margin: 0 auto; padding: 20px; color: #e6edf3; }
-  .topbar { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-  .backlink { color: #a5b816; text-decoration: none; }
+
+  .topbar { position: relative; text-align: center; margin-bottom: 12px; }
+  .topbar h1 { margin: 0; }
+  .subtitle { margin: 6px 0 0; color: #8b949e; }
+
+  .backlink {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #a5b816;
+    text-decoration: none;
+    white-space: nowrap;
+  }
   .backlink:hover { text-decoration: underline; }
 
   .muted { color: #8b949e; }
